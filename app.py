@@ -461,7 +461,8 @@ st.caption("ACONIS — ISO 10993-1:2025 / MDR 2017/745 — Claude AI")
 
 with st.sidebar:
     st.header("⚙️ Configuration")
-    api_key = st.text_input("Anthropic API Key", type="password", placeholder="sk-ant-...")
+    # Lire la clé depuis les secrets Streamlit (invisible pour l'utilisateur)
+api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     st.divider()
 
     st.subheader("🏢 Client")
