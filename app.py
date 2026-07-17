@@ -494,11 +494,10 @@ with left:
 with right:
     st.subheader("Quick Guide")
     st.markdown("""
-**1.** Enter API key  
-**2.** Configure client & device  
-**3.** Upload PDF(s)  
-**4.** Click **Analyze**  
-**5.** Download Excel  
+**1.** Configure client & device  
+**2.** Upload SDS PDF(s)  
+**3.** Click **Analyze**  
+**4.** Download Excel  
 
 ⏱ ~1 min per SDS  
 🔒 No data stored
