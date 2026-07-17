@@ -9,7 +9,11 @@ from openpyxl.styles import PatternFill, Alignment, Font
 from openpyxl.utils import column_index_from_string
 from openpyxl.formatting.rule import FormulaRule
 import pandas as pd
-import json, io, datetime, re, os, traceback
+import json, io, datetime, re, os, traceback, base64, smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
 
 # ─── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(page_title="SDS Biocompatibility Screener", page_icon="🔬",
@@ -20,6 +24,9 @@ DIR         = os.path.dirname(__file__)
 DB_FILE     = os.path.join(DIR, "databases.xlsx")
 TMPL_FILE   = os.path.join(DIR, "template.xlsx")
 PROMPT_FILE = os.path.join(DIR, "agent_prompt_generic.txt")
+
+# ─── ACONIS Logo (base64) ─────────────────────────────────────────────────────
+LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAAMgAAAA8CAYAAAAjW/WRAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAEwGlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSfvu78nIGlkPSdXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQnPz4KPHg6eG1wbWV0YSB4bWxuczp4PSdhZG9iZTpuczptZXRhLyc+CjxyZGY6UkRGIHhtbG5zOnJkZj0naHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyc+CgogPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9JycKICB4bWxuczpBdHRyaWI9J2h0dHA6Ly9ucy5hdHRyaWJ1dGlvbi5jb20vYWRzLzEuMC8nPgogIDxBdHRyaWI6QWRzPgogICA8cmRmOlNlcT4KICAgIDxyZGY6bGkgcmRmOnBhcnNlVHlwZT0nUmVzb3VyY2UnPgogICAgIDxBdHRyaWI6Q3JlYXRlZD4yMDI1LTA2LTI2PC9BdHRyaWI6Q3JlYXRlZD4KICAgICA8QXR0cmliOkV4dElkPjgzZGQ2N2U4LTc4MzAtNGFhYi1iNWE0LTliYjhlOTIxZjdkMDwvQXR0cmliOkV4dElkPgogICAgIDxBdHRyaWI6RmJJZD41MjUyNjU5MTQxNzk1ODA8L0F0dHJpYjpGYklkPgogICAgIDxBdHRyaWI6VG91Y2hUeXBlPjI8L0F0dHJpYjpUb3VjaFR5cGU+CiAgICA8L3JkZjpsaT4KICAgPC9yZGY6U2VxPgogIDwvQXR0cmliOkFkcz4KIDwvcmRmOkRlc2NyaXB0aW9uPgoKIDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PScnCiAgeG1sbnM6ZGM9J2h0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvJz4KICA8ZGM6dGl0bGU+CiAgIDxyZGY6QWx0PgogICAgPHJkZjpsaSB4bWw6bGFuZz0neC1kZWZhdWx0Jz5EZXNpZ24gc2FucyB0aXRyZSAtIDE8L3JkZjpsaT4KICAgPC9yZGY6QWx0PgogIDwvZGM6dGl0bGU+CiA8L3JkZjpEZXNjcmlwdGlvbj4KCiA8cmRmOkRlc2NyaXB0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"
 
 # ─── Styles ───────────────────────────────────────────────────────────────────
 DATA_FILL = PatternFill("solid", fgColor="C5E1FF")
@@ -49,28 +56,33 @@ COLS = [
     ("U","immune_responses"), ("V","other_biological_effects"),
     ("W","cmr_regulatory_status"), ("X","azo_dyes"),
     ("Y","formaldehyde"), ("Z","heavy_metals"), ("AA","reach_svhc"),
-    # AB = ALERT LEVEL formula (written separately)
     ("AC","alert_justification"),
-    # AD = Toxicologist Comment — always empty
-    # AE = Corrected Alert Level — blank for reviewer
-    # AF = Analysis Date — auto
-    # AG = Analyst — auto
-    # AH = Row Status — always Draft
 ]
 
-# ─── ISO 10993-1:2025 options ─────────────────────────────────────────────────
-CONTACT_NATURE_OPTIONS = [
-    "Medical devices in contact with intact skin",
-    "Medical devices in contact with intact mucosal membrane",
-    "Medical devices in contact with either breached or compromised surfaces "
-    "(skin or mucosal membranes) or internal tissues other than circulating blood",
-    "Medical devices in contact with circulating blood",
+ANALYSIS_FIELDS = [
+    "cytotoxicity","sensitisation","skin_irritation","eye_irritation",
+    "acute_systemic_toxicity","subacute_subchronic","chronic_toxicity",
+    "genotoxicity","carcinogenicity","reproductive_toxicity",
+    "endocrine_disruption","bioaccumulation","haemocompatibility",
+    "pyrogenicity","implantation","immune_responses",
+    "other_biological_effects","cmr_regulatory_status","azo_dyes",
+    "formaldehyde","heavy_metals","reach_svhc",
 ]
-CONTACT_DURATION_OPTIONS = [
-    "A – limited (≤24 h)",
-    "B – prolonged (>24 h to 30 d)",
-    "C – long-term (>30 d)",
-]
+
+def compute_alert_level(data: dict) -> str:
+    all_text = " ".join(str(data.get(f, "")) for f in ANALYSIS_FIELDS)
+    if "🔴" in all_text: return "CRITICAL"
+    if "🟠" in all_text: return "MAJOR"
+    if "🟡" in all_text: return "MINOR"
+    return "NONE"
+
+ALERT_COLORS = {
+    "CRITICAL": ("#FF0000", "#FFFFFF", "🔴"),
+    "MAJOR":    ("#FF8C00", "#FFFFFF", "🟠"),
+    "MINOR":    ("#FFC000", "#000000", "🟡"),
+    "NONE":     ("#00B050", "#FFFFFF", "🟢"),
+    "NOT AN SDS": ("#808080", "#FFFFFF", "⬜"),
+}
 
 # ─── Database loading ─────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
@@ -130,7 +142,6 @@ def lookup_all_cas(cas_list: list, dbs: dict) -> str:
     ]
     for cas in cas_list:
         hits = []
-        # CLP
         if "clp" in dbs:
             cc = dbs["clp_cas"]
             m  = dbs["clp"][dbs["clp"][cc].str.contains(cas, regex=False, na=False)]
@@ -139,7 +150,6 @@ def lookup_all_cas(cas_list: list, dbs: dict) -> str:
                 cat   = str(r.get("Hazard Class and Category Code(s)", ""))
                 name  = r.get("International Chemical Identification", "")
                 hits.append(f"  [CLP Annex VI ATP22] {name} | {cat} | H-codes: {codes}")
-        # SVHC
         if "svhc" in dbs:
             cc = dbs["svhc_cas"]
             m  = dbs["svhc"][dbs["svhc"][cc].str.contains(cas, regex=False, na=False)]
@@ -147,7 +157,6 @@ def lookup_all_cas(cas_list: list, dbs: dict) -> str:
                 reason = r.get("Reason for inclusion", r.get("reason", ""))
                 name   = r.get("Substance name", r.get("name", ""))
                 hits.append(f"  [SVHC Candidates] {name} — Reason: {reason}")
-        # IARC
         if "iarc" in dbs:
             cc = dbs["iarc_cas"]
             m  = dbs["iarc"][dbs["iarc"][cc].str.contains(cas, regex=False, na=False)]
@@ -155,7 +164,6 @@ def lookup_all_cas(cas_list: list, dbs: dict) -> str:
                 grp   = r.get("Group", r.get("group", ""))
                 agent = r.get("Agent", r.get("agent", ""))
                 hits.append(f"  [IARC, {today}] Group {grp} — {agent}")
-        # REACH Annex XVII
         if "reach" in dbs:
             cc = dbs["reach_cas"]
             m  = dbs["reach"][dbs["reach"][cc].str.contains(cas, regex=False, na=False)]
@@ -163,26 +171,22 @@ def lookup_all_cas(cas_list: list, dbs: dict) -> str:
                 entry = r.get("Entry", r.get("entry", ""))
                 restr = str(r.get("Restriction", r.get("restriction", "")))[:120]
                 hits.append(f"  [REACH Annex XVII] Entry {entry} — {restr}")
-        # Aromatic Amines
         if "amines" in dbs:
             cc = dbs["amines_cas"]
             m  = dbs["amines"][dbs["amines"][cc].str.contains(cas, regex=False, na=False)]
             if not m.empty:
                 hits.append(f"  [Aromatic Amines Ent.43] MATCH — restricted aromatic amine")
-        # Azo JTF
         if "azo_jtf" in dbs:
             cc = dbs["azo_jtf_cas"]
             m  = dbs["azo_jtf"][dbs["azo_jtf"][cc].str.contains(cas, regex=False, na=False)]
             if not m.empty:
                 hits.append(f"  [Azo - Restricted Amines JTF] MATCH — restricted azo amine")
-        # ED Assessment
         if "ed" in dbs:
             cc = dbs["ed_cas"]
             m  = dbs["ed"][dbs["ed"][cc].str.contains(cas, regex=False, na=False)]
             for _, r in m.iterrows():
                 status = str(r.get("Status", r.get("status", "")))
                 hits.append(f"  [ED Assessment (ECHA), {today}] {status}")
-        # TEDX
         if "tedx" in dbs:
             cc = dbs["tedx_cas"]
             m  = dbs["tedx"][dbs["tedx"][cc].str.contains(cas, regex=False, na=False)]
@@ -214,33 +218,25 @@ def parse_date(s: str) -> str:
 
 
 def apply_cf(ws):
-    """Apply all conditional formatting (ACONIS structure)."""
-    # AB: Alert Level cell colors (1-5)
     ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="CRITICAL"',   "FF0000", True,  False, "FFFFFF"))
     ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="MAJOR"',      "FF8C00", True,  False, "FFFFFF"))
     ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="MINOR"',      "FFC000", True,  False, "000000"))
     ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="NONE"',       "00B050", False, False, "FFFFFF"))
     ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="NOT AN SDS"', "808080", False, False, "FFFFFF"))
-    # Full row background (6-8) — lock column, not row
     ws.conditional_formatting.add("A3:AH9999", fr('$AB3="CRITICAL"', "FFE6E6"))
     ws.conditional_formatting.add("A3:AH9999", fr('$AB3="MAJOR"',    "FFF2E6"))
     ws.conditional_formatting.add("A3:AH9999", fr('$AB3="MINOR"',    "FFFDE6"))
-    # AG: Analyst indicator (9-10)
     ws.conditional_formatting.add("AG3:AG9999",
         fr('$AG3="AI - SDS Screening agent only"', "FFF2CC", False, True))
     ws.conditional_formatting.add("AG3:AG9999",
         fr('AND($AG3<>"",$AG3<>"AI - SDS Screening agent only")', "E2EFDA"))
-    # AD: Toxicologist comment (11)
     ws.conditional_formatting.add("AD3:AD9999", fr('$AD3<>""', "E2EFDA", True))
-    # AH: Row Status (12-15)
     ws.conditional_formatting.add("AH3:AH9999", fr('$AH3="Draft"',      "BDD7EE"))
     ws.conditional_formatting.add("AH3:AH9999", fr('$AH3="Validated"',  "00B050", True,  False, "FFFFFF"))
     ws.conditional_formatting.add("AH3:AH9999", fr('$AH3="Superseded"', "D9D9D9", False, False, "808080"))
     ws.conditional_formatting.add("AH3:AH9999", fr('$AH3="Archived"',   "595959", False, False, "FFFFFF"))
-    # D: SDS date > 3 years
     ws.conditional_formatting.add("D3:D9999",
         fr('AND(D3<>"",ISNUMBER(D3),D3<TODAY()-1095)', "FFE0E0", False, False, "CC0000"))
-    # "TO VERIFY" cells — lavender
     ws.conditional_formatting.add("E3:AC9999", FormulaRule(
         formula=['NOT(ISERROR(SEARCH("TO VERIFY",E3)))'],
         fill=PatternFill("solid", fgColor="E2CCFF"),
@@ -259,7 +255,6 @@ def write_row(wb, data: dict, row: int):
         c.alignment = WRAP_TOP
         c.font      = seg()
 
-    # AB: ALERT LEVEL formula scanning F:AA
     ab = ws.cell(row=row, column=cidx("AB"))
     ab.value = (
         f'=IF(COUNTIF(F{row}:AA{row},"*🔴*")>0,"CRITICAL",'
@@ -270,12 +265,9 @@ def write_row(wb, data: dict, row: int):
     ab.alignment = Alignment(horizontal="center", vertical="center")
     ab.font      = seg(bold=True)
 
-    # AD: Toxicologist Comment — always empty
     ws.cell(row=row, column=cidx("AD"), value="").fill = DATA_FILL
-    # AE: Corrected Alert Level — blank for reviewer
     ws.cell(row=row, column=cidx("AE"), value="").fill = DATA_FILL
 
-    # AF: Analysis Date
     today = datetime.date.today()
     af = ws.cell(row=row, column=cidx("AF"),
                  value=datetime.datetime(today.year, today.month, today.day))
@@ -284,13 +276,11 @@ def write_row(wb, data: dict, row: int):
     af.font          = seg()
     af.number_format = DATE_FMT
 
-    # AG: Analyst
     ag = ws.cell(row=row, column=cidx("AG"), value="AI - SDS Screening agent only")
     ag.fill      = DATA_FILL
     ag.alignment = WRAP_TOP
     ag.font      = seg(italic=True)
 
-    # AH: Row Status
     ah = ws.cell(row=row, column=cidx("AH"), value="Draft")
     ah.fill      = DATA_FILL
     ah.alignment = WRAP_TOP
@@ -353,31 +343,26 @@ def write_project_tab(wb, config: dict, results: list):
     row_w(3, "Generated:",    datetime.datetime.now().strftime("%b %d, %Y — %H:%M"))
     row_w(4, "Tool Version:", "v2.0 — Claude Sonnet 4.5 | ISO 10993-1:2025 / MDR 2017/745")
     row_w(5, "")
-    section(6,  "DEVICE CONFIGURATION")
-    row_w(7,  "Client Name:",        config.get("client_name", ""))
-    row_w(8,  "Device Description:", config.get("device_description", ""))
-    row_w(9,  "Device Type:",        config.get("device_type", ""))
-    row_w(10, "")
-    section(11, "CONTACT CLASSIFICATION — ISO 10993-1:2025")
-    row_w(12, "Nature of Contact:", config.get("contact_nature", ""))
-    row_w(13, "Duration Category:", config.get("contact_duration", ""))
-    row_w(14, "")
-    section(15, "ANALYSIS SUMMARY")
-    row_w(16, "Files Analyzed:", str(len(results)))
-    row_w(17, "")
+    section(6, "CLIENT")
+    row_w(7, "Client Name:",  config.get("client_name", ""))
+    row_w(8, "Client Email:", config.get("client_email", ""))
+    row_w(9, "")
+    section(10, "ANALYSIS SUMMARY")
+    row_w(11, "Files Analyzed:", str(len(results)))
+    row_w(12, "")
 
-    hdrs = ["#", "SDS ID", "Product Name", "Supplier", "Analyst"]
+    hdrs = ["#", "SDS ID", "Product Name", "Supplier", "Alert Level", "Analyst"]
     for i, h in enumerate(hdrs, 1):
-        c = ws.cell(row=18, column=i, value=h)
+        c = ws.cell(row=13, column=i, value=h)
         c.fill      = blue
         c.font      = seg(bold=True, color="FFFFFF")
         c.alignment = Alignment(horizontal="center", vertical="center")
 
     for i, r in enumerate(results, 1):
         row_data = [i, r.get("sds_id",""), r.get("product",""),
-                    r.get("supplier",""), "AI - SDS Screening agent only"]
+                    r.get("supplier",""), r.get("alert_level",""), "AI - SDS Screening agent only"]
         for j, val in enumerate(row_data, 1):
-            c = ws.cell(row=18+i, column=j, value=val)
+            c = ws.cell(row=13+i, column=j, value=val)
             c.fill      = light
             c.font      = seg()
             c.alignment = Alignment(vertical="center", wrap_text=True)
@@ -386,27 +371,50 @@ def write_project_tab(wb, config: dict, results: list):
     ws.column_dimensions["B"].width = 22
     ws.column_dimensions["C"].width = 35
     ws.column_dimensions["D"].width = 25
-    ws.column_dimensions["E"].width = 30
+    ws.column_dimensions["E"].width = 18
+    ws.column_dimensions["F"].width = 30
+
+
+# ─── Email ─────────────────────────────────────────────────────────────────────
+def send_email_with_attachment(to_addr: str, subject: str, body_html: str,
+                                attachment_bytes: bytes = None, attachment_name: str = None):
+    smtp_user = st.secrets.get("SMTP_USER", "")
+    smtp_pass = st.secrets.get("SMTP_PASSWORD", "")
+    if not smtp_user or not smtp_pass:
+        st.warning("⚠️ Email not sent — SMTP credentials missing in Secrets.")
+        return False
+    try:
+        msg = MIMEMultipart("mixed")
+        msg["From"]    = smtp_user
+        msg["To"]      = to_addr
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body_html, "html", "utf-8"))
+        if attachment_bytes and attachment_name:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(attachment_bytes)
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", f'attachment; filename="{attachment_name}"')
+            msg.attach(part)
+        with smtplib.SMTP("smtp.office365.com", 587) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, to_addr, msg.as_string())
+        return True
+    except Exception as e:
+        st.error(f"❌ Email error: {e}")
+        return False
 
 
 # ─── Prompt builder ───────────────────────────────────────────────────────────
 def build_system_prompt(base_prompt: str, config: dict) -> str:
-    is_textile = config.get("device_type", "Non-textile") == "Textile"
     azo_instr = (
-        "Col X (Azo dyes / Aromatic amines): run normal analysis — "
-        "check Aromatic Amines (Ent.43) and Azo - Restricted Amines (JTF) lookup results above."
-        if is_textile else
         "Col X (Azo dyes / Aromatic amines): write exactly "
         "`N/A — not applicable: non-textile device [Agent assessment]`"
     )
-    contact_scenario = (
-        f"{config.get('contact_nature','')} — {config.get('contact_duration','')}"
-    )
-
     prompt = base_prompt
     prompt = prompt.replace("<<CLIENT_NAME>>",          config.get("client_name", "CLIENT"))
     prompt = prompt.replace("<<DEVICE_DESCRIPTION>>",   config.get("device_description", "medical device"))
-    prompt = prompt.replace("<<CONTACT_SCENARIO>>",     contact_scenario)
+    prompt = prompt.replace("<<CONTACT_SCENARIO>>",     "General screening — contact scenario not specified")
     prompt = prompt.replace("<<AZO_DYES_INSTRUCTION>>", azo_instr)
 
     json_schema = """\n\n---\n\n## PYTHON APP — MANDATORY JSON OUTPUT\n
@@ -448,43 +456,81 @@ Use EXACTLY these keys. Values must include all markers (🔴🟠🟡), source t
     return prompt + json_schema
 
 
-# ─── UI ───────────────────────────────────────────────────────────────────────
+# ─── CSS & Branding ───────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-[data-testid="stSidebar"] { min-width: 350px; }
-h1 { color: #007AFF; }
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Segoe UI Light', 'Nunito', sans-serif;
+}
+[data-testid="stSidebar"] {
+    min-width: 320px;
+    background-color: #F0F6FF;
+}
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 { color: #007AFF; }
+h1 { color: #007AFF !important; font-weight: 300; }
+h2, h3 { color: #007AFF; font-weight: 300; }
+.stButton > button[kind="primary"] {
+    background-color: #007AFF !important;
+    border: none;
+    font-family: 'Segoe UI Light', sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+}
+.stButton > button[kind="primary"]:hover {
+    background-color: #005FCC !important;
+}
+.alert-critical { background:#FF0000; color:#fff; padding:4px 10px; border-radius:4px; font-weight:600; }
+.alert-major    { background:#FF8C00; color:#fff; padding:4px 10px; border-radius:4px; font-weight:600; }
+.alert-minor    { background:#FFC000; color:#000; padding:4px 10px; border-radius:4px; font-weight:600; }
+.alert-none     { background:#00B050; color:#fff; padding:4px 10px; border-radius:4px; font-weight:600; }
+.footer-aconis {
+    margin-top: 40px;
+    padding: 18px 0 8px 0;
+    border-top: 1px solid #DCE8FF;
+    color: #888;
+    font-size: 0.78em;
+    text-align: center;
+    line-height: 1.7;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🔬 SDS Biocompatibility Screener")
-st.caption("ACONIS — ISO 10993-1:2025 / MDR 2017/745 — Claude AI")
-
+# ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.header("⚙️ Configuration")
-    # Lire la clé depuis les secrets Streamlit (invisible pour l'utilisateur)
+    logo_bytes = base64.b64decode(LOGO_B64)
+    st.image(logo_bytes, use_container_width=True)
+    st.markdown("---")
+
     api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
-    st.divider()
 
     st.subheader("🏢 Client")
-    client_name        = st.text_input("Client Name", placeholder="e.g. Acme Medical")
-    device_description = st.text_input("Device Description",
-                                       placeholder="e.g. medical compression hosiery")
-    device_type        = st.radio("Device Type", ["Textile", "Non-textile"], horizontal=True)
-    st.divider()
+    client_name  = st.text_input("Company Name", placeholder="e.g. Acme Medical")
+    client_email = st.text_input("📧 Client Email", placeholder="contact@client.com")
+    st.markdown("---")
 
-    st.subheader("📋 ISO 10993-1:2025 Classification")
-    contact_nature   = st.selectbox("Nature of Contact", CONTACT_NATURE_OPTIONS)
-    contact_duration = st.radio("Contact Duration", CONTACT_DURATION_OPTIONS)
-    st.divider()
     st.caption("v2.0 — Claude Sonnet 4.5 — ISO 10993-1:2025")
 
     config = {
-        "client_name":        client_name,
-        "device_description": device_description,
-        "device_type":        device_type,
-        "contact_nature":     contact_nature,
-        "contact_duration":   contact_duration,
+        "client_name":  client_name,
+        "client_email": client_email,
     }
+
+    # ─── Contact button ───────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown(
+        '<a href="mailto:elodie.saudrais@aconis.fr?subject=SDS%20Screener%20-%20Contact" '
+        'style="display:block;text-align:center;background:#007AFF;color:#fff;'
+        'padding:8px 0;border-radius:6px;text-decoration:none;font-size:0.9em;">'
+        '✉️ Contact ACONIS</a>',
+        unsafe_allow_html=True,
+    )
+
+# ─── Main header ──────────────────────────────────────────────────────────────
+st.title("🔬 SDS Biocompatibility Screener")
+st.caption("ACONIS — ISO 10993-1:2025 / MDR 2017/745 — Claude AI")
 
 left, right = st.columns([3, 1])
 with left:
@@ -494,10 +540,10 @@ with left:
 with right:
     st.subheader("Quick Guide")
     st.markdown("""
-**1.** Configure client & device  
+**1.** Enter client name & email  
 **2.** Upload SDS PDF(s)  
 **3.** Click **Analyze**  
-**4.** Download Excel  
+**4.** Excel sent by email  
 
 ⏱ ~1 min per SDS  
 🔒 No data stored
@@ -515,7 +561,6 @@ if not can_run:
 if run:
     st.divider()
 
-    # Validate required files
     missing_files = [(p, n) for p, n in [
         (PROMPT_FILE, "agent_prompt_generic.txt"),
         (DB_FILE,     "databases.xlsx"),
@@ -544,7 +589,7 @@ if run:
     if "SDS Analysis" in wb.sheetnames:
         apply_cf(wb["SDS Analysis"])
 
-    client  = anthropic.Anthropic(api_key=api_key)
+    client_api = anthropic.Anthropic(api_key=api_key)
     results = []
 
     for idx, pdf_file in enumerate(pdf_uploads):
@@ -577,20 +622,11 @@ if run:
             msg.info("🤖 AI analysis in progress (~1–2 min)…")
             prog.progress(50)
 
-            # Device config header for user message
             config_block = (
                 f"DEVICE CONFIGURATION FOR THIS ANALYSIS:\n"
                 f"- Client: {config['client_name']}\n"
-                f"- Device: {config['device_description']}\n"
-                f"- Device Type: {config['device_type']}\n"
-                f"- Contact Nature (ISO 10993-1:2025): {config['contact_nature']}\n"
-                f"- Contact Duration: {config['contact_duration']}\n"
+                f"- Contact Scenario: General screening\n"
             )
-            if config["device_type"] == "Non-textile":
-                config_block += (
-                    "- Col X INSTRUCTION: write exactly "
-                    "`N/A — not applicable: non-textile device [Agent assessment]`\n"
-                )
 
             user_msg = (
                 f"{config_block}\n"
@@ -601,7 +637,7 @@ if run:
                 "Complete the full analysis then output the JSON block."
             )
 
-            response = client.messages.create(
+            response = client_api.messages.create(
                 model="claude-sonnet-4-5",
                 max_tokens=8000,
                 system=system_prompt,
@@ -612,15 +648,12 @@ if run:
 
             msg.info("📋 Parsing JSON…")
             data = {}
-            # Essai 1 : JSON dans balises ```json ... ```
             m = re.search(r'```json\s*(.*?)\s*```', raw, re.DOTALL)
             if m:
                 try:
                     data = json.loads(m.group(1))
                 except Exception:
                     pass
-            
-            # Essai 2 : JSON dans balises ``` ... ```
             if not data:
                 m = re.search(r'```\s*(\{.*?\})\s*```', raw, re.DOTALL)
                 if m:
@@ -628,8 +661,6 @@ if run:
                         data = json.loads(m.group(1))
                     except Exception:
                         pass
-            
-            # Essai 3 : JSON brut dans la réponse
             if not data:
                 m = re.search(r'\{.*\}', raw, re.DOTALL)
                 if m:
@@ -643,8 +674,7 @@ if run:
                 prog.progress(100); msg.empty()
                 continue
 
-            # Find next empty row in SDS Analysis
-            ws_sds  = wb["SDS Analysis"]
+            ws_sds   = wb["SDS Analysis"]
             next_row = 3
             while ws_sds.cell(row=next_row, column=1).value is not None:
                 next_row += 1
@@ -654,11 +684,16 @@ if run:
             write_row(wb, data, next_row)
             extend_dashboard(wb, next_row)
 
+            alert_level = compute_alert_level(data)
+
             results.append({
-                "sds_id":   data.get("sds_id", ""),
-                "product":  data.get("product_name", pdf_file.name),
-                "supplier": data.get("supplier", ""),
-                "row":      next_row,
+                "sds_id":            data.get("sds_id", ""),
+                "product":           data.get("product_name", pdf_file.name),
+                "supplier":          data.get("supplier", ""),
+                "sds_date":          data.get("sds_date", ""),
+                "alert_level":       alert_level,
+                "alert_justification": data.get("alert_justification", ""),
+                "row":               next_row,
             })
 
             prog.progress(100); msg.empty()
@@ -681,25 +716,110 @@ if run:
         st.divider()
         st.subheader(f"🎉 {len(results)} SDS analyzed")
 
+        # ── Save Excel ────────────────────────────────────────────────────────
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
+        excel_bytes = buf.getvalue()
 
         fname = (
             f"SDS_Analysis_{config.get('client_name','').replace(' ','_')}"
             f"_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
         )
+
+        # ── Dashboard preview ─────────────────────────────────────────────────
+        st.subheader("📊 Biocompatibility Screening — Dashboard")
+        for i, r in enumerate(results):
+            lvl   = r["alert_level"]
+            color, txt_color, emoji = ALERT_COLORS.get(lvl, ("#888","#fff","⬜"))
+            badge = f'<span style="background:{color};color:{txt_color};padding:3px 10px;border-radius:4px;font-weight:600;">{emoji} {lvl}</span>'
+            justif = r["alert_justification"][:300] + ("…" if len(r["alert_justification"]) > 300 else "")
+            st.markdown(
+                f"""<div style="border:1px solid #DCE8FF;border-radius:8px;padding:14px 18px;margin-bottom:10px;background:#F8FBFF;">
+                <b>#{i+1} — {r['product']}</b> &nbsp;|&nbsp; {r['supplier']} &nbsp;|&nbsp; {r['sds_date']}<br>
+                <small style="color:#666;">SDS ID: {r['sds_id']}</small><br><br>
+                {badge}<br><br>
+                <small>{justif}</small>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("---")
+
+        # ── Send emails ───────────────────────────────────────────────────────
+        notify_email = st.secrets.get("NOTIFY_EMAIL", "elodie.saudrais@aconis.fr")
+        summary_rows = "".join(
+            f"<tr><td>{i+1}</td><td>{r['product']}</td><td>{r['supplier']}</td>"
+            f"<td><b>{r['alert_level']}</b></td></tr>"
+            for i, r in enumerate(results)
+        )
+
+        # Email to client
+        if client_email:
+            client_html = f"""
+            <div style="font-family:Segoe UI Light,Arial,sans-serif;color:#222;">
+            <img src="data:image/png;base64,{LOGO_B64}" width="160" style="margin-bottom:16px;"><br>
+            <h2 style="color:#007AFF;">Your Biocompatibility Screening Report</h2>
+            <p>Dear {client_name or 'Client'},</p>
+            <p>Please find attached your SDS biocompatibility screening report generated by ACONIS.</p>
+            <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;">
+            <tr style="background:#007AFF;color:#fff;"><th>#</th><th>Product</th><th>Supplier</th><th>Alert Level</th></tr>
+            {summary_rows}
+            </table>
+            <br>
+            <p style="color:#888;font-size:0.85em;">
+            This is a preliminary AI-assisted screening. Results require expert review by a qualified toxicologist.<br><br>
+            <b>ACONIS SAS</b> — 6, rue Bouchard 69510 Messimy, France<br>
+            RCS Lyon n° 944 426 113 — SIRET 944 426 113 00014<br>
+            elodie.saudrais@aconis.fr — +33 6 11 38 53 65
+            </p>
+            <p style="color:#aaa;font-size:0.8em;">Confidential</p>
+            </div>"""
+            ok = send_email_with_attachment(
+                client_email,
+                f"Biocompatibility Screening Report — {client_name}",
+                client_html, excel_bytes, fname
+            )
+            if ok:
+                st.success(f"📧 Excel sent to **{client_email}**")
+
+        # Notification email to Élodie
+        aconis_html = f"""
+        <div style="font-family:Segoe UI Light,Arial,sans-serif;color:#222;">
+        <h2 style="color:#007AFF;">New Screening Completed</h2>
+        <p><b>Date:</b> {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+        <p><b>Client:</b> {client_name}</p>
+        <p><b>Client Email:</b> {client_email}</p>
+        <p><b>Files analyzed:</b> {len(results)}</p>
+        <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;">
+        <tr style="background:#007AFF;color:#fff;"><th>#</th><th>Product</th><th>Supplier</th><th>Alert Level</th></tr>
+        {summary_rows}
+        </table>
+        </div>"""
+        ok2 = send_email_with_attachment(
+            notify_email,
+            f"[SDS Screener] New analysis — {client_name} — {datetime.date.today()}",
+            aconis_html, excel_bytes, fname
+        )
+        if ok2:
+            st.success(f"📧 Summary sent to **{notify_email}**")
+
+        # ── Download button (backup) ──────────────────────────────────────────
         st.download_button(
             label=f"📥 Download {fname}",
-            data=buf.getvalue(),
+            data=excel_bytes,
             file_name=fname,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary",
             use_container_width=True,
         )
-        st.table([{
-            "#": i+1,
-            "Product": r["product"],
-            "Supplier": r["supplier"],
-            "Excel Row": r["row"],
-        } for i, r in enumerate(results)])
+
+# ─── Footer ───────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="footer-aconis">
+    <b>Confidential</b><br>
+    Aconis SAS au capital de 1 000 € — Siège social : 6, rue Bouchard 69510 Messimy, France<br>
+    RCS Lyon n° 944 426 113 — SIRET 944 426 113 00014<br>
+    <a href="mailto:elodie.saudrais@aconis.fr">elodie.saudrais@aconis.fr</a> — +33 6 11 38 53 65
+</div>
+""", unsafe_allow_html=True)
