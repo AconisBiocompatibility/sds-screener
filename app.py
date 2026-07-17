@@ -611,14 +611,32 @@ if run:
             prog.progress(80)
 
             msg.info("📋 Parsing JSON…")
+           data = {}
+            # Essai 1 : JSON dans balises ```json ... ```
             m = re.search(r'```json\s*(.*?)\s*```', raw, re.DOTALL)
-            data = {}
             if m:
                 try:
                     data = json.loads(m.group(1))
                 except Exception:
                     pass
-
+            
+            # Essai 2 : JSON dans balises ``` ... ```
+            if not data:
+                m = re.search(r'```\s*(\{.*?\})\s*```', raw, re.DOTALL)
+                if m:
+                    try:
+                        data = json.loads(m.group(1))
+                    except Exception:
+                        pass
+            
+            # Essai 3 : JSON brut dans la réponse
+            if not data:
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if m:
+                    try:
+                        data = json.loads(m.group())
+                    except Exception:
+                        pass
             if not data:
                 st.warning("⚠️ No JSON found in response — displaying raw report.")
                 st.text_area("Claude response", raw, height=400)
