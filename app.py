@@ -611,7 +611,7 @@ if run:
             prog.progress(80)
 
             msg.info("📋 Parsing JSON…")
-           data = {}
+            data = {}
             # Essai 1 : JSON dans balises ```json ... ```
             m = re.search(r'```json\s*(.*?)\s*```', raw, re.DOTALL)
             if m:
