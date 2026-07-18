@@ -558,11 +558,17 @@ def _notion_register(first_name: str, last_name: str, company: str, email: str) 
 
 
 def _show_registration_gate():
-    st.markdown(
-        "<h1 style=\'color:#007AFF;font-weight:300;margin:0;\'>Biocompatibility SDS Screener</h1>",
-        unsafe_allow_html=True,
-    )
-    st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance")
+    _gc_logo, _gc_title = st.columns([0.10, 0.90])
+    with _gc_logo:
+        st.image(base64.b64decode(LOGO_B64), width=68)
+    with _gc_title:
+        st.markdown(
+            "<h1 style=\'color:#007AFF;font-weight:700;margin:0;padding-top:4px;\'>"
+            "Biocompatibility SDS Screener</h1>"
+            "<p style=\'color:#007AFF;font-size:0.82em;margin:2px 0 0 0;\'>"
+            "ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance</p>",
+            unsafe_allow_html=True,
+        )
     st.divider()
     st.markdown(
         "<div style='background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;"
@@ -631,6 +637,7 @@ st.markdown("""
 <style>
 html, body, [class*="css"] { font-family: 'Segoe UI Light', 'Helvetica Neue', sans-serif; }
 [data-testid="stSidebar"] { background-color: #F0F6FF; }
+.main .block-container { padding-top: 0.6rem !important; }
 [data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3 { color: #007AFF; }
 h1 { color: #007AFF !important; font-weight: 300; }
 h2, h3 { color: #007AFF; font-weight: 300; }
@@ -716,11 +723,17 @@ if not st.session_state.get("registered", False):
     st.stop()
 
 # ─── Main area ────────────────────────────────────────────────────────────────
-st.markdown(
-    "<h1 style='color:#007AFF;font-weight:300;margin:0;'>Biocompatibility SDS Screener</h1>",
-    unsafe_allow_html=True,
-)
-st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance")
+_c_logo, _c_title = st.columns([0.10, 0.90])
+with _c_logo:
+    st.image(base64.b64decode(LOGO_B64), width=68)
+with _c_title:
+    st.markdown(
+        "<h1 style='color:#007AFF;font-weight:700;margin:0;padding-top:2px;'>"
+        "Biocompatibility SDS Screener</h1>"
+        "<p style='color:#007AFF;font-size:0.82em;margin:2px 0 0 2px;font-weight:400;'>"
+        "ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance</p>",
+        unsafe_allow_html=True,
+    )
 
 # ── 1. Presentation ───────────────────────────────────────────────────────────
 db_dates = get_db_dates(DB_FILE) if os.path.exists(DB_FILE) else {}
@@ -731,7 +744,10 @@ client_email = st.session_state.get("reg_email", "")
 config = {"client_name": client_name, "client_email": client_email}
 
 # ── 1. SDS Upload ─────────────────────────────────────────────────────────────
-st.subheader("1 — SDS Upload")
+st.markdown(
+    "<h2 style=\'color:#007AFF;font-weight:700;margin:24px 0 4px 0;\'>1 — SDS Upload</h2>",
+    unsafe_allow_html=True,
+)
 st.caption("Max 5 files per session (beta)")
 pdf_uploads = st.file_uploader(
     "Upload one or more SDS files (PDF)",
@@ -740,7 +756,10 @@ pdf_uploads = st.file_uploader(
 st.divider()
 
 # ── 4. Analysis ───────────────────────────────────────────────────────────────
-st.subheader("2 — Analysis")
+st.markdown(
+    "<h2 style=\'color:#007AFF;font-weight:700;margin:24px 0 4px 0;\'>2 — Analysis</h2>",
+    unsafe_allow_html=True,
+)
 st.caption("Each SDS is processed in ~1–2 min. The application extracts the chemical composition and collects data across 17 biocompatibility endpoints, cross-references each compound against 8 databases, and generates an AI-assisted risk assessment.")
 can_run = bool(api_key and pdf_uploads)
 run = st.button("🚀 Run Analysis", disabled=not can_run, type="primary", use_container_width=True)
