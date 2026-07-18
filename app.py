@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SDS Biocompatibility Screening Tool — ACONIS | Claude AI | ISO 10993-1:2025"""
+"""SDS Biocompatibility Screening Tool — ACONIS | ISO 10993-1:2025"""
 
 import streamlit as st
 import anthropic
@@ -562,7 +562,7 @@ def _show_registration_gate():
         "<h1 style=\'color:#007AFF;font-weight:300;margin:0;\'>Biocompatibility SDS Screener</h1>",
         unsafe_allow_html=True,
     )
-    st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance — Claude AI")
+    st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance")
     st.divider()
     st.markdown(
         "<div style='background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;"
@@ -682,6 +682,29 @@ with st.sidebar:
         "</div>",
         unsafe_allow_html=True,
     )
+    st.markdown("---")
+    db_dates_sb = get_db_dates(DB_FILE) if os.path.exists(DB_FILE) else {}
+    db_rows_sb  = "".join(
+        "<tr style=\'border-bottom:1px solid #DCE8FF;\'>"
+        "<td style=\'padding:5px 8px;color:#222;font-size:0.78em;font-weight:500;\'>"
+        + disp +
+        "</td><td style=\'padding:5px 8px;color:#555;font-size:0.75em;\'>"
+        + normalize_db_version(db_dates_sb.get(sheet, "—")) +
+        "</td></tr>"
+        for sheet, disp in DB_DISPLAY_NAMES
+    )
+    st.markdown(
+        "<p style=\'font-size:0.85em;color:#007AFF;font-weight:600;margin:0 0 8px 0;\'>"
+        "Regulatory databases</p>"
+        "<table style=\'border-collapse:collapse;width:100%;border:1px solid #DCE8FF;\'>"
+        "<tr style=\'background:#007AFF;color:#fff;\'>"
+        "<th style=\'padding:5px 8px;font-size:0.78em;font-weight:500;\'>Database</th>"
+        "<th style=\'padding:5px 8px;font-size:0.78em;font-weight:500;\'>Version</th>"
+        "</tr>"
+        + db_rows_sb +
+        "</table>",
+        unsafe_allow_html=True,
+    )
 
 api_key     = st.secrets.get("ANTHROPIC_API_KEY","")
 ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL","elodie.saudrais@aconis.fr")
@@ -697,31 +720,10 @@ st.markdown(
     "<h1 style='color:#007AFF;font-weight:300;margin:0;'>Biocompatibility SDS Screener</h1>",
     unsafe_allow_html=True,
 )
-st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance — Claude AI")
+st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance")
 
 # ── 1. Presentation ───────────────────────────────────────────────────────────
 db_dates = get_db_dates(DB_FILE) if os.path.exists(DB_FILE) else {}
-db_rows_html = "".join(
-    "<tr style=\'border-bottom:1px solid #DCE8FF;\'>"
-    "<td style=\'padding:8px 14px;color:#222;font-weight:500;\'>" + disp + "</td>"
-    "<td style=\'padding:8px 14px;color:#555;font-size:0.88em;\'>" +
-    normalize_db_version(db_dates.get(sheet, "—")) + "</td></tr>"
-    for sheet, disp in DB_DISPLAY_NAMES
-)
-
-st.markdown(
-    "<div style='background:#fff;border:1px solid #DCE8FF;border-radius:8px;padding:20px 22px;'>"
-    "<p style='margin:0 0 12px 0;font-size:1.05em;color:#007AFF;font-weight:600;'>"
-    "Regulatory databases</p>"
-    "<table style='border-collapse:collapse;width:100%;border:1px solid #DCE8FF;overflow:hidden;'>"
-    "<tr style='background:#007AFF;color:#fff;'>"
-    "<th style='padding:8px 14px;text-align:left;font-weight:500;'>Database</th>"
-    "<th style='padding:8px 14px;text-align:left;font-weight:500;'>Version</th>"
-    "</tr>"
-    + db_rows_html +
-    "</table></div>",
-    unsafe_allow_html=True,
-)
 
 # ── Client info from registration ─────────────────────────────────────────────
 client_name  = st.session_state.get("reg_company", "")
