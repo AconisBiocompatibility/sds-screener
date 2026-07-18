@@ -521,6 +521,90 @@ Use EXACTLY these keys. Values must include all markers (🔴🟠🟡), source t
 
 
 # ─── Email ─────────────────────────────────────────────────────────────────────
+
+# ── Notion registration helpers ────────────────────────────────────────────────
+def _notion_register(first_name: str, last_name: str, company: str, email: str) -> bool:
+    import requests as _req
+    from datetime import datetime, timezone
+    token = st.secrets.get("NOTION_TOKEN", "")
+    db_id = st.secrets.get("NOTION_DB_ID", "")
+    if not token or not db_id:
+        return True
+    admin = st.secrets.get("ADMIN_EMAIL", "elodie.saudrais@aconis.fr")
+    role  = "Admin" if email.strip().lower() == admin.strip().lower() else "Beta tester"
+    payload = {
+        "parent": {"database_id": db_id},
+        "properties": {
+            "Name":          {"title":     [{"text": {"content": first_name + " " + last_name}}]},
+            "First Name":    {"rich_text": [{"text": {"content": first_name}}]},
+            "Last Name":     {"rich_text": [{"text": {"content": last_name}}]},
+            "Company":       {"rich_text": [{"text": {"content": company}}]},
+            "Email":         {"email": email},
+            "Registered at": {"date": {"start": datetime.now(timezone.utc).isoformat()}},
+            "Role":          {"select": {"name": role}},
+        },
+    }
+    try:
+        r = _req.post(
+            "https://api.notion.com/v1/pages",
+            headers={"Authorization": "Bearer " + token,
+                     "Content-Type": "application/json",
+                     "Notion-Version": "2022-06-28"},
+            json=payload, timeout=10,
+        )
+        return r.status_code in (200, 201)
+    except Exception:
+        return True
+
+
+def _show_registration_gate():
+    col_logo, col_title = st.columns([0.08, 0.92])
+    with col_logo:
+        st.image(base64.b64decode(LOGO_B64), width=60)
+    with col_title:
+        st.markdown(
+            "<h1 style='color:#007AFF;font-weight:300;margin:0;padding-top:6px;'>"
+            "Biocompatibility SDS Screener</h1>",
+            unsafe_allow_html=True)
+    st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance — Claude AI")
+    st.divider()
+    st.markdown(
+        "<div style='background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;"
+        "padding:22px 26px;margin:10px 0 28px 0;max-width:600px;'>"
+        "<p style='margin:0 0 8px 0;font-size:1.05em;color:#007AFF;font-weight:600;'>"
+        "🧪 Beta access</p>"
+        "<p style='margin:0;color:#333;line-height:1.6;'>"
+        "Please fill in your details to access the application. "
+        "Your information will be stored securely and used only to manage beta access."
+        "</p></div>",
+        unsafe_allow_html=True,
+    )
+    with st.form("registration_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            first_name = st.text_input("First name *", placeholder="Marie")
+        with c2:
+            last_name  = st.text_input("Last name *", placeholder="Dupont")
+        company  = st.text_input("Company *", placeholder="Acme Medical")
+        email    = st.text_input("Professional email *", placeholder="marie.dupont@acme.com")
+        submitted = st.form_submit_button("Request access →", type="primary", use_container_width=True)
+        if submitted:
+            if not all([first_name.strip(), last_name.strip(), company.strip(), email.strip()]):
+                st.error("Please fill in all fields.")
+            elif "@" not in email or "." not in email.split("@")[-1]:
+                st.error("Please enter a valid email address.")
+            else:
+                with st.spinner("Registering…"):
+                    _notion_register(first_name.strip(), last_name.strip(),
+                                     company.strip(), email.strip())
+                st.session_state["registered"]     = True
+                st.session_state["reg_first_name"] = first_name.strip()
+                st.session_state["reg_last_name"]  = last_name.strip()
+                st.session_state["reg_company"]    = company.strip()
+                st.session_state["reg_email"]      = email.strip()
+                st.rerun()
+
+
 def send_email_with_attachment(to_addr, subject, body_html,
                                 attachment_bytes=None, attachment_name=None):
     smtp_user = st.secrets.get("SMTP_USER","")
@@ -550,89 +634,6 @@ def send_email_with_attachment(to_addr, subject, body_html,
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-family: 'Segoe UI Light', 'Helvetica Neue', sans-serif; }
-# ── Notion registration helpers ────────────────────────────────────────────────
-def _notion_register(first_name: str, last_name: str, company: str, email: str) -> bool:
-    import requests as _req
-    from datetime import datetime, timezone
-    token = st.secrets.get("NOTION_TOKEN", "")
-    db_id = st.secrets.get("NOTION_DB_ID", "")
-    if not token or not db_id:
-        return True
-    admin = st.secrets.get("ADMIN_EMAIL", "elodie.saudrais@aconis.fr")
-    role  = "Admin" if email.strip().lower() == admin.strip().lower() else "Beta tester"
-    payload = {
-        "parent": {"database_id": db_id},
-        "properties": {
-            "Name":          {"title":     [{"text": {"content": f"{first_name} {last_name}"}}]},
-            "First Name":    {"rich_text": [{"text": {"content": first_name}}]},
-            "Last Name":     {"rich_text": [{"text": {"content": last_name}}]},
-            "Company":       {"rich_text": [{"text": {"content": company}}]},
-            "Email":         {"email": email},
-            "Registered at": {"date": {"start": datetime.now(timezone.utc).isoformat()}},
-            "Role":          {"select": {"name": role}},
-        },
-    }
-    try:
-        r = _req.post(
-            "https://api.notion.com/v1/pages",
-            headers={"Authorization": f"Bearer {token}",
-                     "Content-Type": "application/json",
-                     "Notion-Version": "2022-06-28"},
-            json=payload, timeout=10,
-        )
-        return r.status_code in (200, 201)
-    except Exception:
-        return True  # silent fail — never block the user
-
-
-def _show_registration_gate():
-    col_logo, col_title = st.columns([0.08, 0.92])
-    with col_logo:
-        st.image(base64.b64decode(LOGO_B64), width=60)
-    with col_title:
-        st.markdown(
-            '<h1 style="color:#007AFF;font-weight:300;margin:0;padding-top:6px;">' +
-            'Biocompatibility SDS Screener</h1>',
-            unsafe_allow_html=True)
-    st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance — Claude AI")
-    st.divider()
-    beta_html = (
-        '<div style="background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;'
-        'padding:22px 26px;margin:10px 0 28px 0;max-width:600px;">'
-        '<p style="margin:0 0 8px 0;font-size:1.05em;color:#007AFF;font-weight:600;">'
-        '🧪 Beta access</p>'
-        '<p style="margin:0;color:#333;line-height:1.6;">'
-        'Please fill in your details to access the application. '
-        'Your information will be stored securely and used only to manage beta access.'
-        '</p></div>'
-    )
-    st.markdown(beta_html, unsafe_allow_html=True)
-    with st.form("registration_form"):
-        c1, c2 = st.columns(2)
-        with c1:
-            first_name = st.text_input("First name *", placeholder="Marie")
-        with c2:
-            last_name  = st.text_input("Last name *",  placeholder="Dupont")
-        company  = st.text_input("Company *",            placeholder="Acme Medical")
-        email    = st.text_input("Professional email *", placeholder="marie.dupont@acme.com")
-        submitted = st.form_submit_button("Request access →", type="primary", use_container_width=True)
-        if submitted:
-            if not all([first_name.strip(), last_name.strip(), company.strip(), email.strip()]):
-                st.error("Please fill in all fields.")
-            elif "@" not in email or "." not in email.split("@")[-1]:
-                st.error("Please enter a valid email address.")
-            else:
-                with st.spinner("Registering…"):
-                    _notion_register(first_name.strip(), last_name.strip(),
-                                     company.strip(), email.strip())
-                st.session_state["registered"]     = True
-                st.session_state["reg_first_name"] = first_name.strip()
-                st.session_state["reg_last_name"]  = last_name.strip()
-                st.session_state["reg_company"]    = company.strip()
-                st.session_state["reg_email"]      = email.strip()
-                st.rerun()
-
-
 [data-testid="stSidebar"] { background-color: #F0F6FF; }
 [data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3 { color: #007AFF; }
 h1 { color: #007AFF !important; font-weight: 300; }
