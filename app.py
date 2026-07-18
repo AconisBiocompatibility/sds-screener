@@ -89,17 +89,20 @@ DB_DISPLAY_NAMES = [
 
 # ─── SDS format detection ─────────────────────────────────────────────────────
 def detect_sds_format(text: str) -> str:
-    t = text.lower()
-    ghs_markers = [
-        "section 9", "section 10", "section 11", "section 12",
-        "section 13", "section 14", "section 15", "section 16",
-        "physical and chemical properties", "reactivity",
-        "toxicological information", "ecological information",
-        "disposal considerations", "transport information",
-        "regulatory information",
-    ]
-    score = sum(1 for m in ghs_markers if m in t)
-    return "16-section" if score >= 3 else "8-section"
+    """Detect SDS format — works for EN/FR/DE/ES/IT documents."""
+    high_sections = 0
+    for i in range(9, 17):
+        patterns = [
+            rf'section\s+{i}\b',       # EN
+            rf'rubrique\s+{i}\b',      # FR
+            rf'abschnitt\s+{i}\b',     # DE
+            rf'secci[o\u00f3]n\s+{i}\b', # ES
+            rf'sezione\s+{i}\b',       # IT
+            rf'^\s*{i}[\s\.\:\-\)]', # Generic numbered
+        ]
+        if any(re.search(p, text, re.IGNORECASE | re.MULTILINE) for p in patterns):
+            high_sections += 1
+    return "16-section" if high_sections >= 4 else "8-section"
 
 MSDS_8_MODIFIER = """
 
@@ -608,10 +611,10 @@ pdf_uploads = st.file_uploader(
 st.divider()
 
 # ── 4. Analyze ────────────────────────────────────────────────────────────────
-can_run = bool(api_key and pdf_uploads)
+can_run = bool(api_key and pdf_uploads and client_email)
 run = st.button("🚀 Analyser · Analyze", disabled=not can_run, type="primary", use_container_width=True)
 if not can_run and pdf_uploads is not None:
-    missing = [x for x, ok in [("Anthropic API key", api_key), ("SDS PDF(s)", pdf_uploads)] if not ok]
+    missing = [x for x, ok in [("Anthropic API key", api_key), ("SDS PDF(s)", pdf_uploads), ("Report recipient email", client_email)] if not ok]
     if missing:
         st.info(f"Manquant · Missing: {', '.join(missing)}")
 
@@ -709,7 +712,7 @@ if run:
 
             response = client_api.messages.create(
                 model="claude-sonnet-4-5",
-                max_tokens=8000,
+                max_tokens=16000,
                 system=system_prompt,
                 messages=[{"role":"user","content":user_msg}],
             )
@@ -799,32 +802,54 @@ if run:
         st.divider()
         st.subheader(f"📊 Tableau récapitulatif — {len(results)} FDS analysées")
 
-        # Header
-        cols_w = [0.4, 1.2, 2.0, 1.5, 1.0, 1.0, 3.5]
-        h_cols = st.columns(cols_w)
-        for hcol, htxt in zip(h_cols, ["#","SDS ID","Produit","Fournisseur","Date SDS","Alerte","Justification"]):
-            hcol.markdown(f"<b style='color:#007AFF;'>{htxt}</b>", unsafe_allow_html=True)
-        st.markdown("<hr style='margin:4px 0;border-color:#DCE8FF;'>", unsafe_allow_html=True)
-
+        # Build HTML table
+        rows_html = ""
         for i, r in enumerate(results):
             lvl = r["alert_level"]
             bg, fg, emoji = ALERT_COLORS.get(lvl, ("#888","#fff","⚠️"))
-            badge = (f'<span style="background:{bg};color:{fg};padding:2px 8px;'
-                     f'border-radius:4px;font-size:0.85em;font-weight:600;">{emoji} {lvl}</span>')
+            badge = (f'<span style="background:{bg};color:{fg};padding:3px 10px;'
+                     f'border-radius:4px;font-size:0.82em;font-weight:600;white-space:nowrap;">'
+                     f'{emoji} {lvl}</span>')
             justif = r["alert_justification"]
             if r.get("tox_comment"):
                 justif += f"\n\nToxicologist comment: {r['tox_comment']}"
-            justif_display = justif[:200] + ("…" if len(justif)>200 else "")
+            # Convert newlines to <br> for HTML
+            justif_html = justif.replace("\n", "<br>")
 
-            row_cols = st.columns(cols_w)
-            row_cols[0].write(i+1)
-            row_cols[1].write(r["sds_id"] or "—")
-            row_cols[2].write(r["product"])
-            row_cols[3].write(r["supplier"] or "—")
-            row_cols[4].write(r["sds_date"] or "—")
-            row_cols[5].markdown(badge, unsafe_allow_html=True)
-            row_cols[6].caption(justif_display)
+            row_bg = "#FFF8F8" if lvl == "CRITICAL" else                      "#FFF5EE" if lvl == "MAJOR" else                      "#FFFEF0" if lvl == "MINOR" else                      "#F5FFF8" if lvl == "NONE" else "#F5F5F5"
 
+            rows_html += f"""
+            <tr style="background:{row_bg};vertical-align:top;">
+              <td style="padding:10px 8px;text-align:center;color:#666;font-size:0.85em;">{i+1}</td>
+              <td style="padding:10px 8px;font-size:0.82em;color:#444;word-break:break-all;">{r["sds_id"] or "—"}</td>
+              <td style="padding:10px 8px;font-weight:600;color:#222;">{r["product"]}</td>
+              <td style="padding:10px 8px;color:#444;">{r["supplier"] or "—"}</td>
+              <td style="padding:10px 8px;color:#444;white-space:nowrap;">{r["sds_date"] or "—"}</td>
+              <td style="padding:10px 8px;text-align:center;">{badge}</td>
+              <td style="padding:10px 8px;font-size:0.85em;color:#333;line-height:1.5;">{justif_html}</td>
+            </tr>"""
+
+        st.markdown(f"""
+        <table style="width:100%;border-collapse:collapse;border:1px solid #DCE8FF;border-radius:8px;overflow:hidden;">
+          <thead>
+            <tr style="background:#007AFF;color:#fff;">
+              <th style="padding:10px 8px;width:40px;">#</th>
+              <th style="padding:10px 8px;width:140px;">SDS ID</th>
+              <th style="padding:10px 8px;width:180px;">Product</th>
+              <th style="padding:10px 8px;width:140px;">Supplier</th>
+              <th style="padding:10px 8px;width:100px;">SDS Date</th>
+              <th style="padding:10px 8px;width:110px;">Alert Level</th>
+              <th style="padding:10px 8px;">Alert Justification</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows_html}
+          </tbody>
+        </table>
+        """, unsafe_allow_html=True)
+
+        # Show errors separately
+        for r in results:
             if r["alert_level"] == "ERROR":
                 st.warning(f"⚠️ **{r['product']}** — {r['alert_justification']}")
 
