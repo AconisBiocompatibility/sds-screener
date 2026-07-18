@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SDS Biocompatibility Screening Tool — ACONIS | Claude AI | ISO 10993-1:2025"""
+"""SDS Biocompatibility Screening Tool — ACONIS"""
 
 import streamlit as st
 import anthropic
@@ -68,10 +68,10 @@ ANALYSIS_FIELDS = [
 ]
 
 ALERT_COLORS = {
-    "CRITICAL":   ("#FF0000", "#FFFFFF", "🔴"),
-    "MAJOR":      ("#FF8C00", "#FFFFFF", "🟠"),
-    "MINOR":      ("#FFC000", "#000000", "🟡"),
-    "NONE":       ("#00B050", "#FFFFFF", "🟢"),
+    "CRITICAL":   ("#CC0000", "#FFFFFF", "🔴"),
+    "MAJOR":      ("#E53935", "#FFFFFF", "🔴"),
+    "MINOR":      ("#F57C00", "#FFFFFF", "🟠"),
+    "NONE":       ("#2E7D32", "#FFFFFF", "🟢"),
     "NOT AN SDS": ("#808080", "#FFFFFF", "⬜"),
     "ERROR":      ("#888888", "#FFFFFF", "⚠️"),
 }
@@ -351,13 +351,13 @@ def compute_alert_level(data):
 
 def apply_cf(ws):
     ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="CRITICAL"',   "FF0000", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="MAJOR"',      "FF8C00", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="MINOR"',      "FFC000", True,  False, "000000"))
-    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="NONE"',       "00B050", False, False, "FFFFFF"))
+    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="MAJOR"',      "E53935", True,  False, "FFFFFF"))
+    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="MINOR"',      "F57C00", True,  False, "FFFFFF"))
+    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="NONE"',       "2E7D32", False, False, "FFFFFF"))
     ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="NOT AN SDS"', "808080", False, False, "FFFFFF"))
     ws.conditional_formatting.add("A3:AH9999",  fr('$AB3="CRITICAL"', "FFE6E6"))
-    ws.conditional_formatting.add("A3:AH9999",  fr('$AB3="MAJOR"',    "FFF2E6"))
-    ws.conditional_formatting.add("A3:AH9999",  fr('$AB3="MINOR"',    "FFFDE6"))
+    ws.conditional_formatting.add("A3:AH9999",  fr('$AB3="MAJOR"',    "FFE5E5"))
+    ws.conditional_formatting.add("A3:AH9999",  fr('$AB3="MINOR"',    "FFF3E0"))
     ws.conditional_formatting.add("AG3:AG9999",
         fr('$AG3="AI - SDS Screening agent only"', "FFF2CC", False, True))
     ws.conditional_formatting.add("AG3:AG9999",
@@ -690,88 +690,78 @@ st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/74
 # ── 1. Presentation ───────────────────────────────────────────────────────────
 db_dates = get_db_dates(DB_FILE) if os.path.exists(DB_FILE) else {}
 db_rows_html = "".join(
-    f'<tr style="border-bottom:1px solid #DCE8FF;">'
-    f'<td style="padding:8px 14px;color:#222;font-weight:500;">{disp}</td>'
-    f'<td style="padding:8px 14px;color:#555;font-size:0.88em;">{normalize_db_version(db_dates.get(sheet, "—"))}</td></tr>'
+    "<tr style=\'border-bottom:1px solid #DCE8FF;\'>"
+    "<td style=\'padding:8px 14px;color:#222;font-weight:500;\'>" + disp + "</td>"
+    "<td style=\'padding:8px 14px;color:#555;font-size:0.88em;\'>" +
+    normalize_db_version(db_dates.get(sheet, "—")) + "</td></tr>"
     for sheet, disp in DB_DISPLAY_NAMES
 )
 
-st.markdown(f"""
-<div style="background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;
-            padding:22px 26px;margin:10px 0 24px 0;">
+col_left, col_right = st.columns([1, 2])
 
-<p style="margin:0 0 12px 0;font-size:1.05em;color:#007AFF;font-weight:600;">About this application</p>
+with col_left:
+    st.markdown(
+        "<div style=\'background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;"
+        "padding:22px 20px;\'>"
+        "<p style=\'margin:0 0 10px 0;font-size:1.05em;color:#007AFF;font-weight:600;\'>"
+        "About this application</p>"
+        "<p style=\'margin:0 0 18px 0;color:#222;line-height:1.7;font-size:0.92em;\'>"
+        "This application supports the biocompatibility assessment of medical devices "
+        "(ISO&nbsp;10993-1:2025&nbsp;/&nbsp;MDR&nbsp;2017/745). For each SDS, it automatically "
+        "<b>extracts and reports all data relevant to biocompatibility</b> across "
+        "17&nbsp;biological endpoints — including cytotoxicity, sensitisation, genotoxicity, "
+        "carcinogenicity, and endocrine disruption — as well as the full chemical composition. "
+        "Each compound is <b>cross-referenced against 8 regulatory databases</b> in minutes.</p>"
+        "<hr style=\'border:none;border-top:1px solid #DCE8FF;margin:0 0 14px 0;\'>"
+        "<p style=\'margin:0 0 8px 0;font-size:0.9em;color:#007AFF;font-weight:600;\'>How it works</p>"
+        "<div style=\'font-size:0.88em;color:#333;line-height:2;\'>"
+        "📄 <b>SDS PDF upload</b><br>"
+        "↓<br>"
+        "🔢 <b>Text &amp; CAS extraction</b> "
+        "<span style=\'color:#888;font-size:0.9em;\'>(rule-based)</span><br>"
+        "↓<br>"
+        "🔍 <b>8 regulatory databases</b> "
+        "<span style=\'color:#888;font-size:0.9em;\'>(rule-based)</span><br>"
+        "↓<br>"
+        "🤖 <b>AI-assisted synthesis</b> "
+        "<span style=\'color:#888;font-size:0.9em;\'>(Claude AI)</span><br>"
+        "↓<br>"
+        "📊 <b>Excel report download</b>"
+        "</div>"
+        "<hr style=\'border:none;border-top:1px solid #DCE8FF;margin:14px 0 10px 0;\'>"
+        "<p style=\'margin:0;color:#888;font-size:0.82em;\'>"
+        "⚠️ <i>Beta — feedback welcome:</i> "
+        "<a href=\'mailto:elodie.saudrais@aconis.fr?subject=SDS Screener - Suggestion\' "
+        "style=\'color:#007AFF;\'>elodie.saudrais@aconis.fr</a></p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-<p style="margin:0 0 12px 0;color:#222;line-height:1.7;">
-This application supports the biocompatibility assessment of medical devices
-(ISO&nbsp;10993-1:2025&nbsp;/&nbsp;MDR&nbsp;2017/745). For each Safety Data Sheet (SDS), it automatically
-<b>extracts and reports all data relevant to biocompatibility</b> across 17&nbsp;biological endpoints —
-including cytotoxicity, sensitisation, genotoxicity, carcinogenicity, and endocrine disruption —
-as well as the full chemical composition. Each identified compound is then systematically
-<b>cross-referenced against 8 regulatory databases</b>, providing a comprehensive regulatory
-screening in minutes.
-</p>
+with col_right:
+    st.markdown(
+        "<div style=\'background:#fff;border:1px solid #DCE8FF;border-radius:8px;"
+        "padding:20px 22px;\'>"
+        "<p style=\'margin:0 0 12px 0;font-size:1.05em;color:#007AFF;font-weight:600;\'>"
+        "Regulatory databases</p>"
+        "<table style=\'border-collapse:collapse;width:100%;border:1px solid #DCE8FF;"
+        "border-radius:6px;overflow:hidden;\'>"
+        "<tr style=\'background:#007AFF;color:#fff;\'>"
+        "<th style=\'padding:8px 14px;text-align:left;font-weight:500;\'>Database</th>"
+        "<th style=\'padding:8px 14px;text-align:left;font-weight:500;\'>Version</th>"
+        "</tr>"
+        + db_rows_html +
+        "</table>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-<div style="background:#fff;border:1px solid #DCE8FF;border-radius:8px;
-            padding:14px 20px;margin:0 0 16px 0;font-size:0.87em;color:#333;line-height:1.8;">
-  <b style="color:#007AFF;">How it works:</b><br>
-  📄 <b>SDS PDF</b>
-  &nbsp;→&nbsp; 🔢 <b>Automated text &amp; CAS extraction</b> <span style="color:#888;">(rule-based, no AI)</span>
-  &nbsp;→&nbsp; 🔍 <b>Automated cross-check — 8 databases</b> <span style="color:#888;">(rule-based, no AI)</span>
-  &nbsp;→&nbsp; 🤖 <b>AI-assisted synthesis</b> <span style="color:#888;">(Claude AI — document content only)</span>
-  &nbsp;→&nbsp; 📊 <b>Excel report + email</b>
-</div>
-
-<table style="border-collapse:collapse;width:100%;margin:0 0 14px 0;
-              border:1px solid #DCE8FF;border-radius:6px;overflow:hidden;">
-<tr style="background:#007AFF;color:#fff;">
-  <th style="padding:8px 14px;text-align:left;font-weight:500;">Database</th>
-  <th style="padding:8px 14px;text-align:left;font-weight:500;">Version</th>
-</tr>
-{db_rows_html}
-</table>
-
-<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
-  <span style="background:#EAF4FF;border-radius:6px;padding:7px 16px;color:#007AFF;font-size:0.87em;">
-    ⏱ ~1–2 min per SDS
-  </span>
-  <span style="background:#EAF4FF;border-radius:6px;padding:7px 16px;color:#007AFF;font-size:0.87em;">
-    🔒 No data stored on server — transmitted by email only
-  </span>
-</div>
-
-<hr style="border:none;border-top:1px solid #DCE8FF;margin:10px 0;">
-<p style="margin:0;color:#888;font-size:0.84em;">
-  ⚠️ <i>Application under development — feedback welcome:</i>
-  <a href="mailto:elodie.saudrais@aconis.fr?subject=SDS Screener - Suggestion"
-     style="color:#007AFF;">elodie.saudrais@aconis.fr</a>
-  &nbsp;·&nbsp;
-  🧪 <b>Beta</b> — limited to <b>5 SDS per session</b>.
-</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ── 2. Identification ─────────────────────────────────────────────────────────
-st.subheader("1 — Identification")
-col1, col2 = st.columns(2)
-with col1:
-    client_name  = st.text_input(
-        "Company name",
-        value=st.session_state.get("reg_company", ""),
-        placeholder="e.g. Acme Medical")
-with col2:
-    client_email = st.text_input(
-        "Report recipient email",
-        value=st.session_state.get("reg_email", ""),
-        placeholder="contact@client.com",
-        help="The Excel report will be sent to this address. Enter your email to receive your SDS analyses.")
-
+# ── Client info from registration ─────────────────────────────────────────────
+client_name  = st.session_state.get("reg_company", "")
+client_email = st.session_state.get("reg_email", "")
 config = {"client_name": client_name, "client_email": client_email}
 
-st.divider()
-
-# ── 3. SDS Upload ─────────────────────────────────────────────────────────────
-st.subheader("2 — SDS Upload")
+# ── 1. SDS Upload ─────────────────────────────────────────────────────────────
+st.subheader("1 — SDS Upload")
 st.caption("Max 5 files per session (beta)")
 pdf_uploads = st.file_uploader(
     "Upload one or more SDS files (PDF)",
@@ -780,12 +770,12 @@ pdf_uploads = st.file_uploader(
 st.divider()
 
 # ── 4. Analysis ───────────────────────────────────────────────────────────────
-st.subheader("3 — Analysis")
+st.subheader("2 — Analysis")
 st.caption("Each SDS is processed in ~1–2 min. The application extracts the chemical composition and collects data across 17 biocompatibility endpoints, cross-references each compound against 8 databases, and generates an AI-assisted risk assessment.")
-can_run = bool(api_key and pdf_uploads and client_email)
+can_run = bool(api_key and pdf_uploads)
 run = st.button("🚀 Run Analysis", disabled=not can_run, type="primary", use_container_width=True)
-if not can_run and (pdf_uploads is not None or client_email):
-    missing = [x for x, ok in [("Anthropic API key", api_key), ("SDS PDF(s)", pdf_uploads), ("Report recipient email", client_email)] if not ok]
+if not can_run and pdf_uploads is not None:
+    missing = [x for x, ok in [("Anthropic API key", api_key), ("SDS PDF(s)", pdf_uploads)] if not ok]
     if missing:
         st.info(f"Missing: {', '.join(missing)}")
 
@@ -971,7 +961,7 @@ if run:
                  f"_{datetime.date.today().strftime('%Y%m%d')}.xlsx")
 
         st.divider()
-        st.subheader(f"4 — Preview — {len(results)} SDS analysed")
+        st.subheader(f"3 — Preview — {len(results)} SDS analysed")
         st.caption("Summary view only. The full Excel report (with all extracted data and database results) is sent by email.")
 
         # Build HTML table as a single string (avoids Streamlit f-string rendering issues)
@@ -1004,8 +994,8 @@ if run:
                 justif_html = justif.replace("\n", "<br>")
                 row_bg = (
                     "#FFF8F8" if lvl == "CRITICAL" else
-                    "#FFF5EE" if lvl == "MAJOR"    else
-                    "#FFFEF0" if lvl == "MINOR"    else
+                    "#FFE5E5" if lvl == "MAJOR"    else
+                    "#FFF3E0" if lvl == "MINOR"    else
                     "#F5FFF8" if lvl == "NONE"     else "#F5F5F5"
                 )
                 sds_id   = str(r.get("sds_id","") or "—")
