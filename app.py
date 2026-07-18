@@ -104,6 +104,67 @@ def detect_sds_format(text: str) -> str:
             high_sections += 1
     return "16-section" if high_sections >= 4 else "8-section"
 
+def normalize_db_version(raw: str) -> str:
+    """Normalize database version/date to a clean display string."""
+    import re as _re, datetime as _dt
+    if not raw or str(raw).strip() in ("", "—", "None"):
+        return "—"
+    s = str(raw).strip()
+    # Strip common verbose prefixes
+    for prefix in [
+        "Last table update:", "Last table update :",
+        "Last updated", "Last update:", "Last update :",
+        "Database contains",
+    ]:
+        if s.lower().startswith(prefix.lower()):
+            s = s[len(prefix):].strip(" :,")
+    # Take only first meaningful sentence
+    s = _re.split(r'[.\n]', s)[0].strip()
+    # Remove trailing time like "10:08 (CET)"
+    s = _re.sub(r'\s+\d{1,2}:\d{2}.*$', '', s).strip()
+
+    months = {"january":1,"february":2,"march":3,"april":4,"may":5,"june":6,
+              "july":7,"august":8,"september":9,"october":10,"november":11,"december":12}
+
+    # YYYY-MM-DD
+    m = _re.match(r'(\d{4})-(\d{2})-(\d{2})', s)
+    if m:
+        try:
+            d = _dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            return d.strftime("%B %d, %Y")
+        except Exception:
+            pass
+
+    # DD Month YYYY  e.g. "10 December 2025"
+    m = _re.match(r'(\d{1,2})\s+(\w+)\s+(\d{4})', s, _re.IGNORECASE)
+    if m and m.group(2).lower() in months:
+        try:
+            d = _dt.date(int(m.group(3)), months[m.group(2).lower()], int(m.group(1)))
+            return d.strftime("%B %d, %Y")
+        except Exception:
+            pass
+
+    # Month DD, YYYY  e.g. "October 1, 2015"
+    m = _re.match(r'(\w+)\s+(\d{1,2}),?\s+(\d{4})', s, _re.IGNORECASE)
+    if m and m.group(1).lower() in months:
+        try:
+            d = _dt.date(int(m.group(3)), months[m.group(1).lower()], int(m.group(2)))
+            return d.strftime("%B %d, %Y")
+        except Exception:
+            pass
+
+    # Month YYYY  e.g. "September 2018"
+    m = _re.match(r'(\w+)\s+(\d{4})$', s, _re.IGNORECASE)
+    if m and m.group(1).lower() in months:
+        return f"{m.group(1).capitalize()} {m.group(2)}"
+
+    # Looks like a version code (e.g. "ATP 22") — no digits that look like a year
+    if not _re.search(r'\b(19|20)\d{2}\b', s):
+        return f"Version: {s}"
+
+    return s
+
+
 MSDS_8_MODIFIER = """
 
 ## IMPORTANT — OLD FORMAT MSDS DETECTED (pre-GHS / pre-2015)
@@ -526,15 +587,23 @@ ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL","elodie.saudrais@aconis.fr")
 BETA_LIMIT  = 5
 
 # ─── Main area ────────────────────────────────────────────────────────────────
-st.title("🔬 SDS Biocompatibility Screener")
-st.caption("ACONIS — ISO 10993-1:2025 / MDR 2017/745 — Claude AI")
+col_logo, col_title = st.columns([0.08, 0.92])
+with col_logo:
+    st.image(base64.b64decode(LOGO_B64), width=60)
+with col_title:
+    st.markdown(
+        '<h1 style="color:#007AFF;font-weight:300;margin:0;padding-top:6px;">'
+        'Biocompatibility SDS Screener</h1>',
+        unsafe_allow_html=True,
+    )
+st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance — Claude AI")
 
 # ── 1. Presentation ───────────────────────────────────────────────────────────
 db_dates = get_db_dates(DB_FILE) if os.path.exists(DB_FILE) else {}
 db_rows_html = "".join(
     f'<tr style="border-bottom:1px solid #DCE8FF;">'
     f'<td style="padding:8px 14px;color:#222;font-weight:500;">{disp}</td>'
-    f'<td style="padding:8px 14px;color:#555;font-size:0.88em;">Last update: {db_dates.get(sheet, "—")}</td></tr>'
+    f'<td style="padding:8px 14px;color:#555;font-size:0.88em;">{normalize_db_version(db_dates.get(sheet, "—"))}</td></tr>'
     for sheet, disp in DB_DISPLAY_NAMES
 )
 
@@ -545,12 +614,13 @@ st.markdown(f"""
 <p style="margin:0 0 12px 0;font-size:1.05em;color:#007AFF;font-weight:600;">About this application</p>
 
 <p style="margin:0 0 12px 0;color:#222;line-height:1.7;">
-This application automatically analyses <b>Safety Data Sheets (SDS)</b> to support the biocompatibility
-assessment of medical devices (ISO&nbsp;10993-1:2025 / MDR 2017/745).<br>
-It goes beyond simply reading the SDS: it <b>identifies every chemical substance</b> listed in the document
-and <b>automatically cross-references each one against 8 regulatory databases</b> — with no AI at this stage.
-Only then does an AI model perform an expert-level synthesis, strictly constrained to document content
-(no invention, uncertain items flagged as "TO VERIFY").
+This application supports the biocompatibility assessment of medical devices
+(ISO&nbsp;10993-1:2025&nbsp;/&nbsp;MDR&nbsp;2017/745). For each Safety Data Sheet (SDS), it automatically
+<b>extracts and reports all data relevant to biocompatibility</b> across 17&nbsp;biological endpoints —
+including cytotoxicity, sensitisation, genotoxicity, carcinogenicity, and endocrine disruption —
+as well as the full chemical composition. Each identified compound is then systematically
+<b>cross-referenced against 8 regulatory databases</b>, providing a comprehensive regulatory
+screening in minutes.
 </p>
 
 <div style="background:#fff;border:1px solid #DCE8FF;border-radius:8px;
@@ -618,7 +688,7 @@ st.divider()
 
 # ── 4. Analysis ───────────────────────────────────────────────────────────────
 st.subheader("3 — Analysis")
-st.caption("Each SDS is processed in ~1–2 min. CAS numbers are extracted and cross-referenced against 8 databases, then analysed by AI.")
+st.caption("Each SDS is processed in ~1–2 min. The application extracts the chemical composition and collects data across 17 biocompatibility endpoints, cross-references each compound against 8 databases, and generates an AI-assisted risk assessment.")
 can_run = bool(api_key and pdf_uploads and client_email)
 run = st.button("🚀 Run Analysis", disabled=not can_run, type="primary", use_container_width=True)
 if not can_run and (pdf_uploads is not None or client_email):
@@ -781,8 +851,7 @@ if run:
 
             prog.progress(100); msg.empty()
             st.success(f"✅ **{data.get('product_name', pdf_file.name)}** — row {next_row} written.")
-            with st.expander("📊 Full screening report"):
-                st.markdown(raw[:6000] + ("…" if len(raw)>6000 else ""))
+
 
         except anthropic.AuthenticationError:
             st.error("❌ Invalid API key."); break
