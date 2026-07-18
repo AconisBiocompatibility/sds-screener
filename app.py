@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SDS Biocompatibility Screening Tool — ACONIS"""
+"""SDS Biocompatibility Screening Tool — ACONIS | Claude AI | ISO 10993-1:2025"""
 
 import streamlit as st
 import anthropic
@@ -558,14 +558,10 @@ def _notion_register(first_name: str, last_name: str, company: str, email: str) 
 
 
 def _show_registration_gate():
-    col_logo, col_title = st.columns([0.08, 0.92])
-    with col_logo:
-        st.image(base64.b64decode(LOGO_B64), width=60)
-    with col_title:
-        st.markdown(
-            "<h1 style='color:#007AFF;font-weight:300;margin:0;padding-top:6px;'>"
-            "Biocompatibility SDS Screener</h1>",
-            unsafe_allow_html=True)
+    st.markdown(
+        "<h1 style=\'color:#007AFF;font-weight:300;margin:0;\'>Biocompatibility SDS Screener</h1>",
+        unsafe_allow_html=True,
+    )
     st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance — Claude AI")
     st.divider()
     st.markdown(
@@ -665,6 +661,27 @@ with st.sidebar:
         '✉️ Contacter ACONIS</a>',
         unsafe_allow_html=True,
     )
+    st.markdown("---")
+    st.markdown(
+        "<p style=\'font-size:0.85em;color:#007AFF;font-weight:600;margin:0 0 6px 0;\'>"
+        "About this application</p>"
+        "<p style=\'font-size:0.80em;color:#444;line-height:1.65;margin:0 0 12px 0;\'>"
+        "Supports the biocompatibility assessment of medical devices "
+        "(ISO&nbsp;10993-1:2025 / MDR&nbsp;2017/745). "
+        "Automatically <b>extracts and reports biocompatibility data</b> across "
+        "17&nbsp;endpoints and <b>cross-references each compound against "
+        "8 regulatory databases</b>.</p>"
+        "<p style=\'font-size:0.85em;color:#007AFF;font-weight:600;margin:0 0 6px 0;\'>"
+        "How it works</p>"
+        "<div style=\'font-size:0.80em;color:#444;line-height:1.85;\'>"
+        "📄 SDS PDF upload<br>"
+        "↓ 🔢 Text &amp; CAS extraction<br>"
+        "↓ 🔍 8 regulatory databases<br>"
+        "↓ 🤖 AI-assisted synthesis<br>"
+        "↓ 📊 Excel report download"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 api_key     = st.secrets.get("ANTHROPIC_API_KEY","")
 ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL","elodie.saudrais@aconis.fr")
@@ -676,15 +693,10 @@ if not st.session_state.get("registered", False):
     st.stop()
 
 # ─── Main area ────────────────────────────────────────────────────────────────
-col_logo, col_title = st.columns([0.08, 0.92])
-with col_logo:
-    st.image(base64.b64decode(LOGO_B64), width=60)
-with col_title:
-    st.markdown(
-        '<h1 style="color:#007AFF;font-weight:300;margin:0;padding-top:6px;">'
-        'Biocompatibility SDS Screener</h1>',
-        unsafe_allow_html=True,
-    )
+st.markdown(
+    "<h1 style='color:#007AFF;font-weight:300;margin:0;'>Biocompatibility SDS Screener</h1>",
+    unsafe_allow_html=True,
+)
 st.caption("ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance — Claude AI")
 
 # ── 1. Presentation ───────────────────────────────────────────────────────────
@@ -697,63 +709,19 @@ db_rows_html = "".join(
     for sheet, disp in DB_DISPLAY_NAMES
 )
 
-col_left, col_right = st.columns([1, 2])
-
-with col_left:
-    st.markdown(
-        "<div style=\'background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;"
-        "padding:22px 20px;\'>"
-        "<p style=\'margin:0 0 10px 0;font-size:1.05em;color:#007AFF;font-weight:600;\'>"
-        "About this application</p>"
-        "<p style=\'margin:0 0 18px 0;color:#222;line-height:1.7;font-size:0.92em;\'>"
-        "This application supports the biocompatibility assessment of medical devices "
-        "(ISO&nbsp;10993-1:2025&nbsp;/&nbsp;MDR&nbsp;2017/745). For each SDS, it automatically "
-        "<b>extracts and reports all data relevant to biocompatibility</b> across "
-        "17&nbsp;biological endpoints — including cytotoxicity, sensitisation, genotoxicity, "
-        "carcinogenicity, and endocrine disruption — as well as the full chemical composition. "
-        "Each compound is <b>cross-referenced against 8 regulatory databases</b> in minutes.</p>"
-        "<hr style=\'border:none;border-top:1px solid #DCE8FF;margin:0 0 14px 0;\'>"
-        "<p style=\'margin:0 0 8px 0;font-size:0.9em;color:#007AFF;font-weight:600;\'>How it works</p>"
-        "<div style=\'font-size:0.88em;color:#333;line-height:2;\'>"
-        "📄 <b>SDS PDF upload</b><br>"
-        "↓<br>"
-        "🔢 <b>Text &amp; CAS extraction</b> "
-        "<span style=\'color:#888;font-size:0.9em;\'>(rule-based)</span><br>"
-        "↓<br>"
-        "🔍 <b>8 regulatory databases</b> "
-        "<span style=\'color:#888;font-size:0.9em;\'>(rule-based)</span><br>"
-        "↓<br>"
-        "🤖 <b>AI-assisted synthesis</b> "
-        "<span style=\'color:#888;font-size:0.9em;\'>(Claude AI)</span><br>"
-        "↓<br>"
-        "📊 <b>Excel report download</b>"
-        "</div>"
-        "<hr style=\'border:none;border-top:1px solid #DCE8FF;margin:14px 0 10px 0;\'>"
-        "<p style=\'margin:0;color:#888;font-size:0.82em;\'>"
-        "⚠️ <i>Beta — feedback welcome:</i> "
-        "<a href=\'mailto:elodie.saudrais@aconis.fr?subject=SDS Screener - Suggestion\' "
-        "style=\'color:#007AFF;\'>elodie.saudrais@aconis.fr</a></p>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-with col_right:
-    st.markdown(
-        "<div style=\'background:#fff;border:1px solid #DCE8FF;border-radius:8px;"
-        "padding:20px 22px;\'>"
-        "<p style=\'margin:0 0 12px 0;font-size:1.05em;color:#007AFF;font-weight:600;\'>"
-        "Regulatory databases</p>"
-        "<table style=\'border-collapse:collapse;width:100%;border:1px solid #DCE8FF;"
-        "border-radius:6px;overflow:hidden;\'>"
-        "<tr style=\'background:#007AFF;color:#fff;\'>"
-        "<th style=\'padding:8px 14px;text-align:left;font-weight:500;\'>Database</th>"
-        "<th style=\'padding:8px 14px;text-align:left;font-weight:500;\'>Version</th>"
-        "</tr>"
-        + db_rows_html +
-        "</table>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+st.markdown(
+    "<div style='background:#fff;border:1px solid #DCE8FF;border-radius:8px;padding:20px 22px;'>"
+    "<p style='margin:0 0 12px 0;font-size:1.05em;color:#007AFF;font-weight:600;'>"
+    "Regulatory databases</p>"
+    "<table style='border-collapse:collapse;width:100%;border:1px solid #DCE8FF;overflow:hidden;'>"
+    "<tr style='background:#007AFF;color:#fff;'>"
+    "<th style='padding:8px 14px;text-align:left;font-weight:500;'>Database</th>"
+    "<th style='padding:8px 14px;text-align:left;font-weight:500;'>Version</th>"
+    "</tr>"
+    + db_rows_html +
+    "</table></div>",
+    unsafe_allow_html=True,
+)
 
 # ── Client info from registration ─────────────────────────────────────────────
 client_name  = st.session_state.get("reg_company", "")
