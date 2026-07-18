@@ -881,56 +881,63 @@ if run:
         st.subheader(f"4 — Preview — {len(results)} SDS analysed")
         st.caption("Summary view only. The full Excel report (with all extracted data and database results) is sent by email.")
 
-        # Build HTML table
-        rows_html = ""
-        for i, r in enumerate(results):
-            lvl = r["alert_level"]
-            bg, fg, emoji = ALERT_COLORS.get(lvl, ("#888","#fff","⚠️"))
-            badge = (f'<span style="background:{bg};color:{fg};padding:3px 10px;'
-                     f'border-radius:4px;font-size:0.82em;font-weight:600;white-space:nowrap;">'
-                     f'{emoji} {lvl}</span>')
-            justif = r["alert_justification"]
-            if r.get("tox_comment"):
-                justif += f"\n\nToxicologist comment: {r['tox_comment']}"
-            # Convert newlines to <br> for HTML
-            justif_html = justif.replace("\n", "<br>")
+        # Build HTML table as a single string (avoids Streamlit f-string rendering issues)
+        def _build_results_table(results):
+            thead = (
+                '<table style="width:100%;border-collapse:collapse;'
+                'border:1px solid #DCE8FF;font-family:Segoe UI Light,Arial,sans-serif;">' 
+                '<thead><tr style="background:#007AFF;color:#fff;text-align:left;">'
+                '<th style="padding:10px 8px;width:36px;">#</th>'
+                '<th style="padding:10px 8px;width:130px;">SDS ID</th>'
+                '<th style="padding:10px 8px;width:170px;">Product</th>'
+                '<th style="padding:10px 8px;width:130px;">Supplier</th>'
+                '<th style="padding:10px 8px;width:95px;">SDS Date</th>'
+                '<th style="padding:10px 8px;width:105px;">Alert Level</th>'
+                '<th style="padding:10px 8px;">Alert Justification</th>'
+                '</tr></thead><tbody>'
+            )
+            rows = []
+            for i, r in enumerate(results):
+                lvl = r["alert_level"]
+                bg, fg, emoji = ALERT_COLORS.get(lvl, ("#888","#fff","⚠️"))
+                badge = (
+                    '<span style="background:' + bg + ';color:' + fg + ';'
+                    'padding:3px 10px;border-radius:4px;font-size:0.82em;'
+                    'font-weight:600;white-space:nowrap;">' + emoji + ' ' + lvl + '</span>'
+                )
+                justif = r.get("alert_justification", "")
+                if r.get("tox_comment"):
+                    justif += "\n\nToxicologist comment: " + r["tox_comment"]
+                justif_html = justif.replace("\n", "<br>")
+                row_bg = (
+                    "#FFF8F8" if lvl == "CRITICAL" else
+                    "#FFF5EE" if lvl == "MAJOR"    else
+                    "#FFFEF0" if lvl == "MINOR"    else
+                    "#F5FFF8" if lvl == "NONE"     else "#F5F5F5"
+                )
+                sds_id   = str(r.get("sds_id","") or "—")
+                product  = str(r.get("product","") or "—")
+                supplier = str(r.get("supplier","") or "—")
+                sds_date = str(r.get("sds_date","") or "—")
+                rows.append(
+                    '<tr style="background:' + row_bg + ';vertical-align:top;border-bottom:1px solid #EEF4FF;">'
+                    '<td style="padding:10px 8px;text-align:center;color:#666;font-size:0.85em;">' + str(i+1) + '</td>'
+                    '<td style="padding:10px 8px;font-size:0.82em;color:#444;word-break:break-all;">' + sds_id + '</td>'
+                    '<td style="padding:10px 8px;font-weight:600;color:#222;">' + product + '</td>'
+                    '<td style="padding:10px 8px;color:#444;">' + supplier + '</td>'
+                    '<td style="padding:10px 8px;color:#444;white-space:nowrap;">' + sds_date + '</td>'
+                    '<td style="padding:10px 8px;text-align:center;">' + badge + '</td>'
+                    '<td style="padding:10px 8px;font-size:0.85em;color:#333;line-height:1.6;">' + justif_html + '</td>'
+                    '</tr>'
+                )
+            return thead + "".join(rows) + "</tbody></table>"
 
-            row_bg = "#FFF8F8" if lvl == "CRITICAL" else                      "#FFF5EE" if lvl == "MAJOR" else                      "#FFFEF0" if lvl == "MINOR" else                      "#F5FFF8" if lvl == "NONE" else "#F5F5F5"
-
-            rows_html += f"""
-            <tr style="background:{row_bg};vertical-align:top;">
-              <td style="padding:10px 8px;text-align:center;color:#666;font-size:0.85em;">{i+1}</td>
-              <td style="padding:10px 8px;font-size:0.82em;color:#444;word-break:break-all;">{r["sds_id"] or "—"}</td>
-              <td style="padding:10px 8px;font-weight:600;color:#222;">{r["product"]}</td>
-              <td style="padding:10px 8px;color:#444;">{r["supplier"] or "—"}</td>
-              <td style="padding:10px 8px;color:#444;white-space:nowrap;">{r["sds_date"] or "—"}</td>
-              <td style="padding:10px 8px;text-align:center;">{badge}</td>
-              <td style="padding:10px 8px;font-size:0.85em;color:#333;line-height:1.5;">{justif_html}</td>
-            </tr>"""
-
-        st.markdown(f"""
-        <table style="width:100%;border-collapse:collapse;border:1px solid #DCE8FF;border-radius:8px;overflow:hidden;">
-          <thead>
-            <tr style="background:#007AFF;color:#fff;">
-              <th style="padding:10px 8px;width:40px;">#</th>
-              <th style="padding:10px 8px;width:140px;">SDS ID</th>
-              <th style="padding:10px 8px;width:180px;">Product</th>
-              <th style="padding:10px 8px;width:140px;">Supplier</th>
-              <th style="padding:10px 8px;width:100px;">SDS Date</th>
-              <th style="padding:10px 8px;width:110px;">Alert Level</th>
-              <th style="padding:10px 8px;">Alert Justification</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows_html}
-          </tbody>
-        </table>
-        """, unsafe_allow_html=True)
+        st.markdown(_build_results_table(results), unsafe_allow_html=True)
 
         # Show errors separately
         for r in results:
             if r["alert_level"] == "ERROR":
-                st.warning(f"⚠️ **{r['product']}** — {r['alert_justification']}")
+                st.warning("⚠️ **" + r["product"] + "** — " + r["alert_justification"])
 
         st.divider()
 
@@ -1008,7 +1015,7 @@ if run:
                 "and results from all 8 regulatory databases.")
 
         st.download_button(
-            label=f"📥 Télécharger {fname}",
+            label=f"📥 Download {fname}",
             data=excel_bytes, file_name=fname,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary", use_container_width=True,
