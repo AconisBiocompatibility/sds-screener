@@ -532,91 +532,99 @@ st.caption("ACONIS — ISO 10993-1:2025 / MDR 2017/745 — Claude AI")
 # ── 1. Presentation ───────────────────────────────────────────────────────────
 db_dates = get_db_dates(DB_FILE) if os.path.exists(DB_FILE) else {}
 db_rows_html = "".join(
-    f'<tr><td style="padding:3px 10px;color:#222;">{disp}</td>'
-    f'<td style="padding:3px 10px;color:#666;font-size:0.9em;">{db_dates.get(sheet,"—")}</td></tr>'
+    f'<tr style="border-bottom:1px solid #DCE8FF;">'
+    f'<td style="padding:8px 14px;color:#222;font-weight:500;">{disp}</td>'
+    f'<td style="padding:8px 14px;color:#555;font-size:0.88em;">Last update: {db_dates.get(sheet, "—")}</td></tr>'
     for sheet, disp in DB_DISPLAY_NAMES
 )
 
 st.markdown(f"""
 <div style="background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;
-            padding:20px 24px;margin:10px 0 20px 0;">
+            padding:22px 26px;margin:10px 0 24px 0;">
 
-<p style="margin:0 0 6px 0;font-size:1em;color:#007AFF;font-weight:600;">À propos · About</p>
+<p style="margin:0 0 12px 0;font-size:1.05em;color:#007AFF;font-weight:600;">About this application</p>
 
-<p style="margin:0 0 8px 0;color:#222;">
-🇫🇷 <b>FR</b> — Cette application analyse automatiquement vos Fiches de Données de Sécurité (FDS)
-pour en extraire les informations pertinentes à l'évaluation de la biocompatibilité des dispositifs médicaux
-(ISO 10993-1:2025 / MDR 2017/745). Chaque substance identifiée est vérifiée systématiquement
-dans <b>8 bases de données réglementaires</b>.
-</p>
-<p style="margin:0 0 8px 0;color:#222;">
-🇬🇧 <b>EN</b> — This application automatically analyses Safety Data Sheets (SDS) to extract
-information relevant to biocompatibility assessment of medical devices (ISO 10993-1:2025 / MDR 2017/745).
-Each identified substance is systematically checked against <b>8 regulatory databases</b>.
-</p>
-<p style="margin:0 0 10px 0;color:#555;font-size:0.88em;">
-⚙️ Built with <b>Python</b> and <b>Claude AI</b> (Anthropic) ·
-Results require expert toxicological review.
+<p style="margin:0 0 12px 0;color:#222;line-height:1.7;">
+This application automatically analyses <b>Safety Data Sheets (SDS)</b> to support the biocompatibility
+assessment of medical devices (ISO&nbsp;10993-1:2025 / MDR 2017/745).<br>
+It goes beyond simply reading the SDS: it <b>identifies every chemical substance</b> listed in the document
+and <b>automatically cross-references each one against 8 regulatory databases</b> — with no AI at this stage.
+Only then does an AI model perform an expert-level synthesis, strictly constrained to document content
+(no invention, uncertain items flagged as "TO VERIFY").
 </p>
 
-<table style="border-collapse:collapse;width:100%;margin-bottom:10px;">
+<div style="background:#fff;border:1px solid #DCE8FF;border-radius:8px;
+            padding:14px 20px;margin:0 0 16px 0;font-size:0.87em;color:#333;line-height:1.8;">
+  <b style="color:#007AFF;">How it works:</b><br>
+  📄 <b>SDS PDF</b>
+  &nbsp;→&nbsp; 🔢 <b>Automated text &amp; CAS extraction</b> <span style="color:#888;">(rule-based, no AI)</span>
+  &nbsp;→&nbsp; 🔍 <b>Automated cross-check — 8 databases</b> <span style="color:#888;">(rule-based, no AI)</span>
+  &nbsp;→&nbsp; 🤖 <b>AI-assisted synthesis</b> <span style="color:#888;">(Claude AI — document content only)</span>
+  &nbsp;→&nbsp; 📊 <b>Excel report + email</b>
+</div>
+
+<table style="border-collapse:collapse;width:100%;margin:0 0 14px 0;
+              border:1px solid #DCE8FF;border-radius:6px;overflow:hidden;">
 <tr style="background:#007AFF;color:#fff;">
-  <th style="padding:5px 10px;text-align:left;">Base de données · Database</th>
-  <th style="padding:5px 10px;text-align:left;">Version / Date</th>
+  <th style="padding:8px 14px;text-align:left;font-weight:500;">Database</th>
+  <th style="padding:8px 14px;text-align:left;font-weight:500;">Version</th>
 </tr>
 {db_rows_html}
 </table>
 
-<div style="display:flex;gap:20px;margin-bottom:10px;">
-  <span style="background:#EAF4FF;border-radius:6px;padding:6px 14px;color:#007AFF;font-size:0.88em;">
-    ⏱ ~1–2 min par FDS · per SDS
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
+  <span style="background:#EAF4FF;border-radius:6px;padding:7px 16px;color:#007AFF;font-size:0.87em;">
+    ⏱ ~1–2 min per SDS
   </span>
-  <span style="background:#EAF4FF;border-radius:6px;padding:6px 14px;color:#007AFF;font-size:0.88em;">
-    🔒 Aucune donnée stockée sur le serveur — transmises uniquement par email
+  <span style="background:#EAF4FF;border-radius:6px;padding:7px 16px;color:#007AFF;font-size:0.87em;">
+    🔒 No data stored on server — transmitted by email only
   </span>
 </div>
 
 <hr style="border:none;border-top:1px solid #DCE8FF;margin:10px 0;">
-<p style="margin:0;color:#888;font-size:0.85em;">
-  ⚠️ <i>Application en cours de développement · Application under development.</i>
-  Suggestions bienvenues · Feedback welcome :
+<p style="margin:0;color:#888;font-size:0.84em;">
+  ⚠️ <i>Application under development — feedback welcome:</i>
   <a href="mailto:elodie.saudrais@aconis.fr?subject=SDS Screener - Suggestion"
-     style="color:#007AFF;">elodie.saudrais@aconis.fr</a><br><br>
-  🧪 <b>Version bêta · Beta version</b> — Analyse limitée à <b>5 FDS par session</b> pour les testeurs.
-  <i>Beta testing is limited to <b>5 SDS per session</b> per user.</i>
+     style="color:#007AFF;">elodie.saudrais@aconis.fr</a>
+  &nbsp;·&nbsp;
+  🧪 <b>Beta</b> — limited to <b>5 SDS per session</b>.
 </p>
 </div>
 """, unsafe_allow_html=True)
 
-st.divider()
-
-# ── 2. Client ─────────────────────────────────────────────────────────────────
-st.subheader("🏢 Client")
+# ── 2. Identification ─────────────────────────────────────────────────────────
+st.subheader("1 — Identification")
 col1, col2 = st.columns(2)
 with col1:
-    client_name  = st.text_input("Nom de la société · Company Name", placeholder="e.g. Acme Medical")
+    client_name  = st.text_input("Company name", placeholder="e.g. Acme Medical")
 with col2:
-    client_email = st.text_input("📧 Email du client · Client Email", placeholder="contact@client.com")
+    client_email = st.text_input(
+        "Report recipient email",
+        placeholder="contact@client.com",
+        help="The Excel report will be sent to this address. Enter your email to receive your SDS analyses.")
 
 config = {"client_name": client_name, "client_email": client_email}
 
 st.divider()
 
-# ── 3. Upload ─────────────────────────────────────────────────────────────────
-st.subheader("📄 FDS · SDS (PDF)")
+# ── 3. SDS Upload ─────────────────────────────────────────────────────────────
+st.subheader("2 — SDS Upload")
+st.caption("Max 5 files per session (beta)")
 pdf_uploads = st.file_uploader(
-    "Déposez une ou plusieurs FDS · Upload one or more SDS files",
+    "Upload one or more SDS files (PDF)",
     type=["pdf"], accept_multiple_files=True)
 
 st.divider()
 
-# ── 4. Analyze ────────────────────────────────────────────────────────────────
+# ── 4. Analysis ───────────────────────────────────────────────────────────────
+st.subheader("3 — Analysis")
+st.caption("Each SDS is processed in ~1–2 min. CAS numbers are extracted and cross-referenced against 8 databases, then analysed by AI.")
 can_run = bool(api_key and pdf_uploads and client_email)
-run = st.button("🚀 Analyser · Analyze", disabled=not can_run, type="primary", use_container_width=True)
-if not can_run and pdf_uploads is not None:
+run = st.button("🚀 Run Analysis", disabled=not can_run, type="primary", use_container_width=True)
+if not can_run and (pdf_uploads is not None or client_email):
     missing = [x for x, ok in [("Anthropic API key", api_key), ("SDS PDF(s)", pdf_uploads), ("Report recipient email", client_email)] if not ok]
     if missing:
-        st.info(f"Manquant · Missing: {', '.join(missing)}")
+        st.info(f"Missing: {', '.join(missing)}")
 
 # ── 5. Processing ─────────────────────────────────────────────────────────────
 if run:
@@ -625,10 +633,10 @@ if run:
     max_files    = None if is_admin else BETA_LIMIT
     if not is_admin and len(pdf_uploads) > BETA_LIMIT:
         st.warning(
-            f"⚠️ Version bêta : analyse limitée à **{BETA_LIMIT} FDS par session**. "
-            f"Les {len(pdf_uploads) - BETA_LIMIT} FDS supplémentaires ont été ignorées. · "
-            f"Beta version: limited to **{BETA_LIMIT} SDS per session**. "
-            f"{len(pdf_uploads) - BETA_LIMIT} additional file(s) ignored."
+            f"⚠️ Beta version: analysis limited to **{BETA_LIMIT} SDS per session**. "
+            f"{len(pdf_uploads) - BETA_LIMIT} additional file(s) ignored. "
+            
+            
         )
         pdf_uploads = pdf_uploads[:BETA_LIMIT]
 
@@ -645,11 +653,11 @@ if run:
     with open(PROMPT_FILE,"r",encoding="utf-8") as f:
         base_prompt = f.read()
 
-    with st.spinner("Chargement des bases de données..."):
+    with st.spinner("Loading databases…"):
         with open(DB_FILE,"rb") as f:
             db_bytes = f.read()
         dbs = load_databases(db_bytes)
-    st.success(f"✅ {len([k for k in dbs if k.endswith('_sheet')])} bases de données chargées")
+    st.success(f"✅ {len([k for k in dbs if k.endswith('_sheet')])} databases loaded")
 
     with open(TMPL_FILE,"rb") as f:
         tmpl_bytes = f.read()
@@ -666,7 +674,7 @@ if run:
         msg  = st.empty()
 
         try:
-            msg.info("📖 Extraction du texte PDF…")
+            msg.info("📖 Extracting PDF text…")
             prog.progress(10)
             pdf_bytes = pdf_file.read()
             doc   = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -675,23 +683,24 @@ if run:
             pdf_text = "\n".join(pages)
 
             if len(pdf_text.strip()) < 200:
-                st.warning("⚠️ Texte très court — PDF peut être scanné (image).")
+                st.warning("⚠️ Very short text — PDF may be image-based (scanned).")
 
             sds_format = detect_sds_format(pdf_text)
-            fmt_label  = "16 sections (GHS)" if sds_format == "16-section" else "Ancien format MSDS (8 sections)"
-            st.caption(f"📋 Format détecté : {fmt_label}")
+            fmt_label  = "16-section GHS" if sds_format == "16-section" else "Old MSDS format (8 sections)"
 
-            msg.info("🔢 Extraction des numéros CAS…")
+            msg.info("🔢 Extracting CAS numbers…")
             prog.progress(20)
             cas_list = sorted(set(re.findall(r'\b\d{1,7}-\d{2}-\d\b', pdf_text)))
-            st.caption(f"{len(cas_list)} CAS trouvés : "
-                       f"{', '.join(cas_list[:12])}{'…' if len(cas_list)>12 else ''}")
+            with st.expander("Technical details"):
+                st.caption(f"📋 Format detected: {fmt_label}")
+                st.caption(f"{len(cas_list)} CAS found: "
+                           f"{', '.join(cas_list[:12])}{'…' if len(cas_list)>12 else ''}") 
 
-            msg.info("📊 Consultation des bases de données…")
+            msg.info("📊 Cross-referencing databases…")
             prog.progress(35)
             lookup_report = lookup_all_cas(cas_list, dbs)
 
-            msg.info("🤖 Analyse IA en cours (~1–2 min)…")
+            msg.info("🤖 AI analysis in progress (~1–2 min)…")
             prog.progress(50)
 
             system_prompt = build_system_prompt(base_prompt, config, sds_format)
@@ -719,7 +728,7 @@ if run:
             raw = response.content[0].text
             prog.progress(80)
 
-            msg.info("📋 Extraction du JSON…")
+            msg.info("📋 Parsing JSON response…")
             data = {}
             for pattern in [
                 r'```json\s*(.*?)\s*```',
@@ -737,7 +746,7 @@ if run:
             if not data:
                 error_reason = "JSON non trouvé dans la réponse de l'IA · JSON not found in AI response"
                 st.warning(f"⚠️ {error_reason}")
-                st.text_area("Réponse brute · Raw response", raw, height=300)
+                st.text_area("Raw AI response", raw, height=300)
                 results.append({
                     "sds_id": "—", "product": pdf_file.name, "supplier": "—",
                     "sds_date": "—", "alert_level": "ERROR",
@@ -752,7 +761,7 @@ if run:
             while ws_sds.cell(row=next_row, column=1).value is not None:
                 next_row += 1
 
-            msg.info("📝 Écriture Excel…")
+            msg.info("📝 Writing to Excel…")
             prog.progress(90)
             write_row(wb, data, next_row)
             extend_dashboard(wb, next_row)
@@ -771,24 +780,24 @@ if run:
             })
 
             prog.progress(100); msg.empty()
-            st.success(f"✅ **{data.get('product_name', pdf_file.name)}** — ligne {next_row} écrite.")
-            with st.expander("📊 Rapport complet"):
+            st.success(f"✅ **{data.get('product_name', pdf_file.name)}** — row {next_row} written.")
+            with st.expander("📊 Full screening report"):
                 st.markdown(raw[:6000] + ("…" if len(raw)>6000 else ""))
 
         except anthropic.AuthenticationError:
-            st.error("❌ Clé API invalide."); break
+            st.error("❌ Invalid API key."); break
         except anthropic.RateLimitError:
-            st.error("❌ Limite de taux atteinte — attendez 30 s."); break
+            st.error("❌ Rate limit reached — wait 30 s."); break
         except Exception as exc:
             error_reason = str(exc)
-            st.error(f"❌ Erreur : {exc}")
+            st.error(f"❌ Error: {exc}")
             results.append({
                 "sds_id":"—","product":pdf_file.name,"supplier":"—","sds_date":"—",
                 "alert_level":"ERROR",
-                "alert_justification":f"⚠️ Erreur technique : {error_reason[:200]}",
+                "alert_justification":f"⚠️ Technical error: {error_reason[:200]}",
                 "tox_comment":"","status":"Error","format":"—",
             })
-            with st.expander("Détails techniques"):
+            with st.expander("Technical details"):
                 st.code(traceback.format_exc())
 
     # ── 6. Results summary ────────────────────────────────────────────────────
@@ -800,7 +809,8 @@ if run:
                  f"_{datetime.date.today().strftime('%Y%m%d')}.xlsx")
 
         st.divider()
-        st.subheader(f"📊 Tableau récapitulatif — {len(results)} FDS analysées")
+        st.subheader(f"4 — Preview — {len(results)} SDS analysed")
+        st.caption("Summary view only. The full Excel report (with all extracted data and database results) is sent by email.")
 
         # Build HTML table
         rows_html = ""
@@ -924,9 +934,9 @@ if run:
         if ok2:
             st.success(f"📧 Résumé envoyé à **{notify_email}**")
 
-        st.info("📊 L'interface ci-dessus affiche un **résumé**. "
-                "L'**Excel envoyé par email** contient le détail complet de toutes les "
-                "données extraites et les résultats des 8 bases de données réglementaires.")
+        st.info("📊 The preview above is a **summary only**. "
+                "The **Excel file sent by email** contains the full detail of all extracted data "
+                "and results from all 8 regulatory databases.")
 
         st.download_button(
             label=f"📥 Télécharger {fname}",
@@ -938,9 +948,9 @@ if run:
 # ─── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="footer-aconis">
-    Aconis SAS au capital de 1 000 € — Siège social : 6, rue Bouchard 69510 Messimy, France<br>
+    Aconis SAS — 6, rue Bouchard 69510 Messimy, France<br>
     RCS Lyon n° 944 426 113 — SIRET 944 426 113 00014<br>
     <a href="mailto:elodie.saudrais@aconis.fr" style="color:#007AFF;">elodie.saudrais@aconis.fr</a>
-    — +33 6 11 38 53 65
+    &nbsp;·&nbsp; +33 6 11 38 53 65
 </div>
 """, unsafe_allow_html=True)
