@@ -723,17 +723,13 @@ if not st.session_state.get("registered", False):
     st.stop()
 
 # ─── Main area ────────────────────────────────────────────────────────────────
-_c_logo, _c_title = st.columns([0.10, 0.90])
-with _c_logo:
-    st.image(base64.b64decode(LOGO_B64), width=68)
-with _c_title:
-    st.markdown(
-        "<h1 style='color:#007AFF;font-weight:700;margin:0;padding-top:2px;'>"
-        "Biocompatibility SDS Screener</h1>"
-        "<p style='color:#007AFF;font-size:0.82em;margin:2px 0 0 2px;font-weight:400;'>"
-        "ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance</p>",
-        unsafe_allow_html=True,
-    )
+st.markdown(
+    "<h1 style='color:#007AFF;font-weight:700;margin:0 0 4px 0;'>"
+    "Biocompatibility SDS Screener</h1>"
+    "<p style='color:#007AFF;font-size:0.82em;margin:2px 0 0 0;font-weight:400;'>"
+    "ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance</p>",
+    unsafe_allow_html=True,
+)
 
 # ── 1. Presentation ───────────────────────────────────────────────────────────
 db_dates = get_db_dates(DB_FILE) if os.path.exists(DB_FILE) else {}
