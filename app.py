@@ -637,6 +637,9 @@ st.markdown("""
 <style>
 html, body, [class*="css"] { font-family: 'Segoe UI Light', 'Helvetica Neue', sans-serif; }
 [data-testid="stSidebar"] { background-color: #F0F6FF; }
+[data-testid="stSidebar"] img {
+    mix-blend-mode: multiply;
+}
 .main .block-container { padding-top: 0.6rem !important; }
 [data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3 { color: #007AFF; }
 h1 { color: #007AFF !important; font-weight: 300; }
