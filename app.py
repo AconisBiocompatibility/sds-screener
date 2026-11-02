@@ -558,17 +558,13 @@ def _notion_register(first_name: str, last_name: str, company: str, email: str) 
 
 
 def _show_registration_gate():
-    _gc_logo, _gc_title = st.columns([0.10, 0.90])
-    with _gc_logo:
-        st.image(base64.b64decode(LOGO_B64), width=68)
-    with _gc_title:
-        st.markdown(
-            "<h1 style=\'color:#007AFF;font-weight:700;margin:0;padding-top:4px;\'>"
-            "Biocompatibility SDS Screener</h1>"
-            "<p style=\'color:#007AFF;font-size:0.82em;margin:2px 0 0 0;\'>"
-            "ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance</p>",
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        "<h1 style='color:#007AFF;font-weight:700;margin:0;padding-top:4px;'>"
+        "Biocompatibility SDS Screener</h1>"
+        "<p style='color:#007AFF;font-size:0.82em;margin:2px 0 0 0;'>"
+        "ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance</p>",
+        unsafe_allow_html=True,
+    )
     st.divider()
     st.markdown(
         "<div style='background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;"
