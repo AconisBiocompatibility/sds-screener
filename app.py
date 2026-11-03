@@ -1,3 +1,4 @@
+template_aligned.py
 #!/usr/bin/env python3
 """SDS Biocompatibility Screening Tool — ACONIS | ISO 10993-1:2025"""
 
@@ -5,7 +6,7 @@ import streamlit as st
 import anthropic
 import fitz
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill, Alignment, Font
+from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
 from openpyxl.utils import column_index_from_string
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.drawing.image import Image as XLImage
@@ -432,6 +433,8 @@ def fit_row_height(ws, row, first_col, last_col, min_height=22, max_height=420):
 def apply_table_font_and_alignment(wb):
     """Set table font size 10, titles size 11, top-left wrapped data."""
     from copy import copy
+    thin = Side(style="thin", color="8FAADC")
+    table_border = Border(left=thin, right=thin, top=thin, bottom=thin)
     for ws in wb.worksheets:
         for row in ws.iter_rows():
             for cell in row:
@@ -447,6 +450,7 @@ def apply_table_font_and_alignment(wb):
                     cell = ws.cell(r, c)
                     a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
                     cell.alignment = a
+                    cell.border = table_border
                     f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
                 fit_row_height(ws, r, 1, 2)
         elif ws.title == "SDS Dashboard":
@@ -455,6 +459,7 @@ def apply_table_font_and_alignment(wb):
                     cell = ws.cell(r, c)
                     a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
                     cell.alignment = a
+                    cell.border = table_border
                     f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
                 fit_row_height(ws, r, 1, 10)
         elif ws.title == "SDS Analysis":
@@ -463,6 +468,7 @@ def apply_table_font_and_alignment(wb):
                     cell = ws.cell(r, c)
                     a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
                     cell.alignment = a
+                    cell.border = table_border
                     f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
                 fit_row_height(ws, r, 1, 34)
         if ws.title in ("Project", "SDS Dashboard", "SDS Analysis"):
