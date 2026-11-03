@@ -805,8 +805,8 @@ if run:
             st.error(f"❌ Fichier manquant : **{n}**")
         st.stop()
 
-   with open(PROMPT_FILE, "r", encoding="utf-8") as f:
-    base_prompt = f.read()
+ with open(PROMPT_FILE, "r", encoding="utf-8") as f:
+        base_prompt = f.read()
 
 system_prompt = build_system_prompt(base_prompt, config, sds_format)
 
