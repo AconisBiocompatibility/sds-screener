@@ -805,19 +805,17 @@ if run:
             st.error(f"❌ Fichier manquant : **{n}**")
         st.stop()
 
- with open(PROMPT_FILE, "r", encoding="utf-8") as f:
+    with open(PROMPT_FILE, "r", encoding="utf-8") as f:
         base_prompt = f.read()
 
-system_prompt = build_system_prompt(base_prompt, config, sds_format)
-
     with st.spinner("Loading databases…"):
-        with open(DB_FILE,"rb") as f:
+        with open(DB_FILE, "rb") as f:
             db_bytes = f.read()
         dbs = load_databases(db_bytes)
-    st.success(f"✅ {len([k for k in dbs if k.endswith('_sheet')])} databases loaded")
 
-    with open(TMPL_FILE,"rb") as f:
+    with open(TMPL_FILE, "rb") as f:
         tmpl_bytes = f.read()
+
     wb = load_workbook(io.BytesIO(tmpl_bytes))
     if "SDS Analysis" in wb.sheetnames:
         apply_cf(wb["SDS Analysis"])
