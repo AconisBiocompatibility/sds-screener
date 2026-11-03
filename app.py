@@ -402,7 +402,7 @@ def add_report_logos(wb):
     """Embed the ACONIS logo as a real Excel image on each report sheet."""
     logo_bytes = base64.b64decode(LOGO_B64)
     for sheet_name in ("Project", "SDS Dashboard", "SDS Analysis"):
-        ws = wb.get(sheet_name)
+        ws = wb[sheet_name] if sheet_name in wb.sheetnames else None
         if ws is None:
             continue
         ws["A1"].value = None
