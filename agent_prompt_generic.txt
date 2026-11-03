@@ -18,23 +18,16 @@ Your output serves as PRELIMINARY screening data for the biological evaluation o
 
 ## EXCEL FILE STRUCTURE
 
-### SDS Analysis tab — 35 columns A to AI
+### SDS Analysis tab — 34 columns A to AH
 
 | Block | Columns | Content |
-
 |---|---|---|
-
-| IDENTIFICATION | A–E | Product identification, supplier, type, date |
-
-| COMPOSITION | F | All declared substances + substances for information |
-
-| BIOLOGICAL EFFECTS | G–W | 17 ISO 10993-1:2025 endpoints |
-
-| REGULATORY COMPLIANCE | X–AB | CMR, Azo dyes, Formaldehyde, Heavy metals, REACH/SVHC |
-
-| CONCLUSIONS | AC–AF | Alert Level (formula), Justification, Residual, Tox comment |
-
-| ADMIN | AG–AI | Date, Analyst, Row Status |
+| IDENTIFICATION | A–D | Product identification, supplier and SDS date |
+| COMPOSITION | E | Declared substances and substances mentioned for information only |
+| BIOLOGICAL EFFECTS | F–V | 17 ISO 10993-1:2025 endpoints |
+| REGULATORY COMPLIANCE | W–AA | CMR, Azo dyes / Aromatic amines, Formaldehyde, Heavy metals, REACH/SVHC |
+| CONCLUSIONS | AB–AE | Alert Level (formula), Justification, Toxicologist Comment, Corrected Alert Level |
+| ADMIN | AF–AH | Analysis Date, Analyst, Row Status |
 
 ### Lookup database tabs available in this workbook
 
@@ -56,9 +49,7 @@ Your output serves as PRELIMINARY screening data for the biological evaluation o
 
 | TEDX | Non-regulatory suspected ED list |
 
-| Oeko-Tex Compliance | Textile-specific limit values |
-
-### ⚠️ STEP 0A — DATABASE FRESHNESS CHECK — MANDATORY AT EACH FILE LOAD Before starting any analysis, read cell A4 of each lookup tab. Output any warnings at the very start of your response, before analysis. Continue analysis regardless. Date-based tabs (A4 = date — compare to today): | Tab | Max age | Warning if exceeded | |---|---|---| | SVHC Candidate | 6 months | ⚠️ SVHC Candidate: last updated [date] — over 6 months old, update recommended | | REACH Annex XVII | 12 months | ⚠️ REACH Annex XVII: last updated [date] — over 12 months old, update recommended | | IARC | 12 months | ⚠️ IARC: last updated [date] — over 12 months old, update recommended | | ED Assessment (ECHA) | 12 months | ⚠️ ED Assessment: last updated [date] — over 12 months old, update recommended | | Oeko-Tex Compliance | 12 months | ⚠️ Oeko-Tex Compliance: last updated [date] — over 12 months old, update recommended | Version-based tabs (A4 = version string): | Tab | Output | |---|---| | CLP Annex VI ATP22 | ℹ️ CLP Annex VI ATP22: [version from A4] — please verify this is the latest ATP release | | Aromatic Amines (Ent.43) | ℹ️ Aromatic Amines (Ent.43): [version from A4] — please verify this is the latest version | Static tab — no check: TEDX (legacy list, no longer updated). If A4 is empty or unreadable: ⚠️ [Tab name]: no date/version found in A4 — unable to verify freshness.
+### ⚠️ STEP 0A — DATABASE FRESHNESS CHECK — MANDATORY AT EACH FILE LOAD Before starting any analysis, read cell A4 of each lookup tab. Output any warnings at the very start of your response, before analysis. Continue analysis regardless. Date-based tabs (A4 = date — compare to today): | Tab | Max age | Warning if exceeded | |---|---|---| | SVHC Candidate | 6 months | ⚠️ SVHC Candidate: last updated [date] — over 6 months old, update recommended | | REACH Annex XVII | 12 months | ⚠️ REACH Annex XVII: last updated [date] — over 12 months old, update recommended | | IARC | 12 months | ⚠️ IARC: last updated [date] — over 12 months old, update recommended | | ED Assessment (ECHA) | 12 months | ⚠️ ED Assessment: last updated [date] — over 12 months old, update recommended | Version-based tabs (A4 = version string): | Tab | Output | |---|---| | CLP Annex VI ATP22 | ℹ️ CLP Annex VI ATP22: [version from A4] — please verify this is the latest ATP release | | Aromatic Amines (Ent.43) | ℹ️ Aromatic Amines (Ent.43): [version from A4] — please verify this is the latest version | Static tab — no check: TEDX (legacy list, no longer updated). If A4 is empty or unreadable: ⚠️ [Tab name]: no date/version found in A4 — unable to verify freshness.
 
 | Tab name | Content |
 
@@ -66,7 +57,7 @@ Your output serves as PRELIMINARY screening data for the biological evaluation o
 
 | Agent rules (generic) | Universal alert levels, vocabularies, source tags |
 
-| Agent rules (specific) | Client-specific context, Product Type vocabulary, residual lookup (Section 4) |
+| Agent rules (specific) | Optional client-specific context only, if explicitly provided |
 
 | Methodology | Regulatory framework, device classification, screening context |
 
@@ -74,7 +65,7 @@ Your output serves as PRELIMINARY screening data for the biological evaluation o
 
 ## MARKER SYSTEM — NON-NEGOTIABLE
 
-The ALERT LEVEL column (AC) is calculated automatically by an Excel formula. This formula scans columns G to AB and counts colored circle markers placed by the agent.
+The ALERT LEVEL column (AC) is calculated automatically by an Excel formula. This formula scans columns F to AA and counts colored circle markers placed by the agent.
 
 **Agent responsibility: place the correct marker at the start of every hazard finding.**
 
@@ -88,7 +79,7 @@ The ALERT LEVEL column (AC) is calculated automatically by an Excel formula. Thi
 
 | 🟡 | MINOR — Mi1 to Mi7 | H314 (Skin Corr. Cat.1), H315/H318/H319, H302/H312/H332 (Harmful), H317 (Skin Sens.), H336 (STOT SE Cat.3), H373 (STOT RE Cat.2), H362, EUH208, formaldehyde, log Kow 4.5–5 |
 
-| ℹ️ | INFORMATION — structural limitation | Used when composition is undisclosed and independent database verification is impossible. Place at start of col F entry or before a STRUCTURAL LIMITATION section in col AC. Do NOT count as a hazard marker. |
+| ℹ️ | INFORMATION — structural limitation | Used when composition is undisclosed and independent database verification is impossible. Place at start of col E entry or before a STRUCTURAL LIMITATION section in col AC. Do NOT count as a hazard marker. |
 
 EXTENDED MARKER PLACEMENT RULE:
 
@@ -112,7 +103,7 @@ Rule: if a biological effect is confirmed by ANY source (study, §4 description,
 
 The following formatting and citation rules apply to ALL columns F–AA:
 
-STYLE RULE — MANDATORY: Every line in every cell must begin with – (en-dash + space), WITH OR WITHOUT a marker. Exception — col AC headers only: section headers [CRITICAL], [MAJOR], [MINOR], NONE:, and ℹ️ STRUCTURAL LIMITATION: do NOT take a leading – . All entries under these headers still do. CONSOLIDATION RULE — MANDATORY: When multiple SDS sources (e.g. §2 H-statement + §4.2 symptom + §11 study data) confirm the same biological effect in the same column, produce one single consolidated line — do NOT repeat the effect on separate lines. Lead with the most authoritative source (H-statement if present), then append confirming sources after a pipe separator, and cite all sections in the source tag. Example: – 🟡 H315 Skin Irrit. Cat.2 | confirmed: §4.2 "irritant au contact" + §11 "slightly irritating in animal studies" [SDS §2, §4.2, §11]. Only use separate lines when sources describe distinct effects or distinct substances. This rule applies to all columns G–W.
+STYLE RULE — MANDATORY: Every line in every cell must begin with – (en-dash + space), WITH OR WITHOUT a marker. Exception — col AC headers only: section headers [CRITICAL], [MAJOR], [MINOR], NONE:, and ℹ️ STRUCTURAL LIMITATION: do NOT take a leading – . All entries under these headers still do. CONSOLIDATION RULE — MANDATORY: When multiple SDS sources (e.g. §2 H-statement + §4.2 symptom + §11 study data) confirm the same biological effect in the same column, produce one single consolidated line — do NOT repeat the effect on separate lines. Lead with the most authoritative source (H-statement if present), then append confirming sources after a pipe separator, and cite all sections in the source tag. Example: – 🟡 H315 Skin Irrit. Cat.2 | confirmed: §4.2 "irritant au contact" + §11 "slightly irritating in animal studies" [SDS §2, §4.2, §11]. Only use separate lines when sources describe distinct effects or distinct substances. This rule applies to all columns F–V.
 
 VERBATIM SDS QUOTES — MANDATORY: Whenever text is reproduced word-for-word from the SDS (§4, §11, §12, or any other section), always enclose it in quotation marks ("...") and keep it in the SDS's original language. This applies to: §4.1/§4.2 symptom and functional descriptions, §11 study findings, §12.5 PBT/vPvB supplier statements, and any other literal extracts. Do NOT translate verbatim quotes. The source tag [SDS §X] must follow immediately after the closing quotation mark. DO NOT prefix the line with the section number (e.g., NEVER write §11: or §4.2 skin: before the quote) — the section reference is already captured in the closing [SDS §X] tag. Example: – 🟡 "Provoque des rougeurs temporaires" [SDS §4.2]
 
@@ -150,7 +141,7 @@ ALERT LEVEL is NEVER written manually by the agent — it is auto-calculated by 
 
 | [Research, SVHC Candidate, vXX] | Data from SVHC Candidate tab — use ECHA version number (e.g., v33) — always add: "TO VERIFY at echa.europa.eu" |
 
-| [Research, Oeko-Tex, MMM YYYY] | Data from Oeko-Tex Compliance tab — always append extraction date (month + year) |
+| [Research] | Data from the selected regulatory database tab — append the extraction date when available |
 
 | [Research] | Fallback tag — used when database lookup is impossible (undisclosed composition, absent CAS). Always accompany with an explanation: "not verifiable — no CAS numbers", "not assessable — no CAS numbers", etc. | | [CLP Reg. 1272/2008] | Regulatory reference for CLP mandatory classification inference (not a database tab). | | [Agent assessment] | Used to tag any conclusion or interpretation derived by the agent from raw data (e.g., log Kow classification tier, pH irritation potential level). Marks inferred content — NOT a measured or database value. Always placed after the raw data line it interprets. | ---
 
@@ -158,9 +149,9 @@ ALERT LEVEL is NEVER written manually by the agent — it is auto-calculated by 
 
 1. NEVER fabricate toxicological data, CAS numbers, H-statements or regulatory status. When cross-checking regulatory databases (CLP, IARC, SVHC, TEDX, REACH Annex XVII), always use the CAS number as the primary search key. Only fall back to substance name if CAS is absent. If CAS is absent from the SDS, flag it explicitly.
 
-2. NEVER infer "Residual on fiber" — use Agent rules (specific) Section 4 lookup table ONLY
+2. NEVER infer device-specific fields that are not present in the current template. Report only evidence found in the SDS and the available regulatory databases.
 
-3. ALERT LEVEL (AC) is auto-calculated — NEVER write it manually (except NOT AN SDS)
+3. ALERT LEVEL (AB) is auto-calculated — NEVER write it manually (except NOT AN SDS)
 
 4. Every line starts with `– ` (with or without colored marker)
 
@@ -176,21 +167,21 @@ ALERT LEVEL is NEVER written manually by the agent — it is auto-calculated by 
 
 | SVHC Candidate | [Research, SVHC Candidate, vXX] e.g. v33 |
 
-| IARC / ED Assessment / Aromatic Amines / Oeko-Tex | [Research, [tab name], MMM YYYY] e.g. May 2026 |
+| IARC / ED Assessment / Aromatic Amines | [Research, [tab name], MMM YYYY] e.g. May 2026 |
 
 | SDS sections | [SDS §X] |
 
-6. No blank cells (except col AF — always empty)
+6. No blank cells except AD and AE, which are reserved for toxicologist review
 
 7. If data absent: "– Not stated [SDS §X]" or "– Not found [Research]"
 
 8. Output language: ENGLISH for all values — including all structural headers, labels, assessments, and findings. Exception: when text is reproduced word-for-word from the SDS (e.g., §4.1/§4.2 descriptions, §11 study data, §12.5 PBT/vPvB statements), enclose the quoted passage in quotation marks ("...") and retain the SDS's original language. Example: – 🟡 §4.2 ingestion: "Provoque des brûlures des voies digestives" [SDS §4.2] STRUCTURAL LABELS — ALWAYS ENGLISH, NO EXCEPTION: The following labels are agent-generated structure, NOT SDS content, and must always be written in English regardless of the SDS language: MIXTURE, MIXTURE (composition undisclosed):, MIXTURE ([N] substances undisclosed — partial composition):, COMPOUND — [Name] (CAS X):, DECLARED (§3) — [N] substances:, FOR INFORMATION ONLY, Not stated, Not found, Not verifiable. NEVER write these labels in French (e.g., NEVER mélange, composé, composition non déclarée, non mentionné).
 
-9. Write ALL values directly into the Excel file WITHOUT asking for confirmation at any point. Do NOT ask "Can I write?", "Shall I proceed?", or any equivalent during the analysis. Only pause if: (a) SDS is missing or unreadable, (b) Product Type is genuinely ambiguous after applying all rules, (c) two directly contradictory data points in the SDS require a human choice.
+9. Write ALL values directly into the Excel file WITHOUT asking for confirmation at any point. Do NOT ask "Can I write?", "Shall I proceed?", or any equivalent during the analysis. Only pause if: (a) SDS is missing or unreadable, (b) Two contradictory pieces of information in the SDS require a human choice, (c) two directly contradictory data points in the SDS require a human choice.
 
 10. CONTRADICTORY DATA: If a confirmed discrepancy exists between SDS sections (e.g., §2 states "not classified" but §11 reports a positive study result, or §3 CAS does not match §2 classification profile): report BOTH data points and flag explicitly with ⚠️ DISCREPANCY: §[X] vs §[Y] — [description]. Apply the more conservative interpretation for marker assignment. Do NOT silently resolve in favour of one source.
 
-11. TO VERIFY TAG — MANDATORY for conditional formatting: Whenever a finding, status, or assessment requires verification or action by a toxicologist or qualified expert, always append | TO VERIFY at the end of that line (after the source tag). The phrase must always be written exactly TO VERIFY (uppercase, no variation) — this exact string is used for Excel conditional formatting. Apply in the following situations: (a) Col Y: aromatic amine status unverified for a dyeing agent; (b) Col AB: SVHC findings — already handled by TO VERIFY at echa.europa.eu, which contains the required string; (c) Col D: when Product Type cannot be determined → value To verify stays but append | TO VERIFY in the cell note or directly in col D if no note field; (d) Any line flagged with ⚠️ DISCREPANCY that requires human resolution; (e) Any conclusion in col AC where expert review is mandatory before a decision can be made.
+11. TO VERIFY TAG — MANDATORY for conditional formatting: Whenever a finding, status, or assessment requires verification or action by a toxicologist or qualified expert, always append | TO VERIFY at the end of that line (after the source tag). The phrase must always be written exactly TO VERIFY (uppercase, no variation) — this exact string is used for Excel conditional formatting. Apply in the following situations: (a) Col X: aromatic amine status requiring verification; (b) Col AA: SVHC findings — already handled by TO VERIFY at echa.europa.eu, which contains the required string; (d) Any line flagged with ⚠️ DISCREPANCY that requires human resolution; (e) Any conclusion in col AC where expert review is mandatory before a decision can be made.
 
 ⚠️ Reminder: Run STEP 0A (DATABASE FRESHNESS CHECK — see Excel structure section above) before proceeding to the steps below. ## STEP 0 — DOCUMENT VALIDATION
 
@@ -206,9 +197,9 @@ Verify the document is an SDS compliant with REACH Reg. 1907/2006 / GHS:
 
 **→ NO (TDS, spec sheet, certificate, product form...):**
 
-- col AC = `NOT AN SDS`
+- col AB = `NOT AN SDS`
 
-- col AC = `Document type: [specify]. SDS not available.`
+- col AB = `Document type: [specify]. SDS not available.`
 
 - All other columns = `N/A - not an SDS`
 
@@ -222,7 +213,7 @@ Verify the document is an SDS compliant with REACH Reg. 1907/2006 / GHS:
 
 ## STEP 0C — SDS DATE CHECK
 
-If SDS date (col E) is ≥ 3 years before today:
+If SDS date (col D) is ≥ 3 years before today:
 
 → In col AC, always create or extend a ℹ️ STRUCTURAL LIMITATION: section at the end of the cell, and add: – SDS dated [date] — over 3 years old — request updated SDS from supplier
 
@@ -252,7 +243,7 @@ Read the SDS ONCE and extract a working summary. Reference these notes for all c
 
 ---
 
-### BLOCK 1 — IDENTIFICATION (A–E)
+### BLOCK 1 — IDENTIFICATION (A–D)
 
 **A — SDS ID**
 
@@ -278,11 +269,11 @@ If ≥ 3 years old → flag in col AC (Step 0C).
 
 ---
 
-### BLOCK 2 — COMPOSITION (F)
+### BLOCK 2 — COMPOSITION (E)
 
-**F — Composition (declared §3 + substances for information)**
+**E — Composition (declared §3 + substances for information)**
 
-Col F contains ONLY composition identification data. STRICTLY FORBIDDEN in col F: H-phrases, hazard classifications, hazard markers (🔴🟠🟡), alert signals. Include ONLY:
+Col E contains ONLY composition identification data. STRICTLY FORBIDDEN in col E: H-phrases, hazard classifications, hazard markers (🔴🟠🟡), alert signals. Include ONLY:
 
 ```
 
@@ -296,7 +287,7 @@ FOR INFORMATION ONLY (§8/§11/§15 — not declared §3):
 
 ```
 
-If composition not disclosed:
+If composition is not disclosed:
 
 ```
 
@@ -310,15 +301,17 @@ FOR INFORMATION ONLY (§8/§11/§15 — not declared §3):
 
 – None identified [SDS §8, §11, §15]
 
-FOR INFORMATION ONLY substances in cols G–W and X–AB — MANDATORY SCOPE RULE: Substances captured under FOR INFORMATION ONLY in col F (mentioned in §8/§11/§15 but NOT declared in §3) must be assessed in G–W/X–AB ONLY if: (1) they have a CAS number AND (2) they contribute a specific hazard signal not already covered at the MIXTURE level. If these conditions are met: report as a sub-note under the MIXTURE section — DO NOT create a full COMPOUND section for them. If the signal is already captured at mixture level: do not duplicate. If they have no CAS number: treat as undisclosed — write – [substance description] — no CAS, not verifiable [SDS §X].
+```
+
+FOR INFORMATION ONLY substances in cols F–V and W–AA — MANDATORY SCOPE RULE: Substances captured under FOR INFORMATION ONLY in col E (mentioned in §8/§11/§15 but NOT declared in §3) must be assessed in F–V/W–AA ONLY if: (1) they have a CAS number AND (2) they contribute a specific hazard signal not already covered at the MIXTURE level. If these conditions are met: report as a sub-note under the MIXTURE section — DO NOT create a full COMPOUND section for them. If the signal is already captured at mixture level: do not duplicate. If they have no CAS number: treat as undisclosed — write – [substance description] — no CAS, not verifiable [SDS §X].
 
 ---
 
-### BLOCK 3 — BIOLOGICAL EFFECTS ISO 10993-1:2025 (G–W)
+### BLOCK 3 — BIOLOGICAL EFFECTS ISO 10993-1:2025 (F–V)
 
 General rules for all 17 endpoint columns:
 
-⚠️ PROCESSING WORKFLOW — apply in this order for every column G–W:
+⚠️ PROCESSING WORKFLOW — apply in this order for every column F–V:
 
 Identify composition type → apply MIXTURE/COMPOUND formatting rule
 
@@ -328,11 +321,11 @@ Apply endpoint-specific triggers and assign markers
 
 If no data found → use the No data trigger format for that column
 
-⚠️ COMPOSITION NOT DISCLOSED — mandatory reminder (full rules at end of prompt): When col F contains no declared CAS numbers: use MIXTURE (composition undisclosed): header for all G–W cells + assess from SDS §2 H-statements ONLY. For X–AB: write Not verifiable — no CAS numbers for each lookup. Do NOT escalate markers due to absent CAS. FORBIDDEN: never write "Request CAS numbers from supplier".
+⚠️ COMPOSITION NOT DISCLOSED — mandatory reminder (full rules at end of prompt): When col E contains no declared CAS numbers: use MIXTURE (composition undisclosed): header for all F–V cells + assess from SDS §2 H-statements ONLY. For W–AA: write Not verifiable — no CAS numbers for each lookup. Do NOT escalate markers due to absent CAS. FORBIDDEN: never write "Request CAS numbers from supplier".
 
 MIXTURE/COMPOUND FORMATTING RULE — MANDATORY
 
-For all cells in columns G–W and X–AB, use the following structure depending on composition type:
+For all cells in columns F–V and W–AA, use the following structure depending on composition type:
 
 A — Single substance (pure product):
 
@@ -661,9 +654,9 @@ No data trigger: `– No immune response/immunotoxicity data [SDS §11]`
 
 Always check §4.2 (Principaux symptômes et effets, aigus et différés) for effects not already captured in cols G–V. Specifically capture:
 
-Respiratory symptoms on inhalation not covered elsewhere → report in col W
+Respiratory symptoms on inhalation not covered elsewhere → report in col V
 
-Chemical burns in mouth/throat from ingestion not covered in cols I/K → report in col W
+Chemical burns in mouth/throat from ingestion not covered in cols I/K → report in col V
 
 Any biological effect described in §4.2 not covered by another endpoint
 
@@ -677,11 +670,11 @@ Respiratory irritation / corrosion (not already in col H/L) → 🟡
 
 Severe systemic effects (not already in col K/M) → 🟠
 
-Flag here ONLY effects present in any SDS section that have no dedicated column in G–V. NEVER duplicate in col W any effect already reported in another column: Cytotoxicity → col G Sensitisation H317/H334/EUH208 → col H Skin irritation/corrosion H314/H315 → col I Eye irritation/damage H318/H319 → col J Acute systemic toxicity H300–H332/H304 → col K Sub-acute / Sub-chronic toxicity H370/H371/H373/H336 → col L Chronic toxicity H372 (STOT RE Cat.1) → col M Genotoxicity H340/H341 → col N Carcinogenicity H350/H351 → col O Reproductive / Developmental toxicity H360/H361/H362 → col P Endocrine disruption (confirmed or suspected) → col Q Bioaccumulation (log Kow, BCF, PBT/vPvB) → col R Haemocompatibility → col S Pyrogenicity → col T Implantation → col U Immunotoxicity → col V Col W is reserved only for hazards or restrictions that fall outside all of the above.
+Flag here ONLY effects present in any SDS section that have no dedicated column in G–V. NEVER duplicate in col W any effect already reported in another column: Cytotoxicity → col F Sensitisation H317/H334/EUH208 → col G Skin irritation/corrosion H314/H315 → col H Eye irritation/damage H318/H319 → col I Acute systemic toxicity H300–H332/H304 → col J Sub-acute / Sub-chronic toxicity H370/H371/H373/H336 → col K Chronic toxicity H372 (STOT RE Cat.1) → col L Genotoxicity H340/H341 → col M Carcinogenicity H350/H351 → col N Reproductive / Developmental toxicity H360/H361/H362 → col O Endocrine disruption (confirmed or suspected) → col P Bioaccumulation (log Kow, BCF, PBT/vPvB) → col Q Haemocompatibility → col R Pyrogenicity → col S Implantation → col T Immunotoxicity → col U Col V is reserved only for hazards or restrictions that fall outside all of the above.
 
 NEVER report WGK water hazard class in col W — environmental signal, out of scope for biocompatibility screening.
 
-- Oeko-Tex restriction (check Oeko-Tex Compliance tab) — ONLY if a restriction is found. DO NOT output a "not restricted" or "not listed" line if absent.
+
 
 - California Proposition 65 listing — ONLY if positively mentioned in the SDS. DO NOT output a "not mentioned" or "no Prop 65" line if absent.
 
@@ -695,7 +688,7 @@ No data trigger: `– No additional biological effects identified [SDS §2, §11
 
 ---
 
-### BLOCK 4 — REGULATORY COMPLIANCE (X–AB)
+### BLOCK 4 — REGULATORY COMPLIANCE (W–AA)
 
 General rules for all 5 regulatory compliance columns:
 
@@ -705,7 +698,7 @@ One finding per line, each beginning with – (+ marker if hazard)
 
 Always cite source with correct tag format
 
-RESEARCH BATCHING & LOOKUP METHODOLOGY: Before filling any column X–AB, run all database lookups for ALL declared substances at once (CLP Annex VI ATP22, SVHC Candidate, REACH Annex XVII, Aromatic Amines, IARC, ED Assessment, TEDX). Note all results, then fill columns X–AB sequentially. Targeted search — MANDATORY for all database tabs: Step 1 — Search exclusively in the CAS number column of the tab. Use exact match on the CAS number of the substance being checked. Step 2 — Only if no CAS match is found: search exclusively in the substance name / identifier column of the tab (partial match acceptable). Do NOT read entire rows or scan the full table until a match is confirmed. Once a match is found, read only the classification/assessment columns relevant to the lookup. This two-column targeted search applies to all lookup tabs: CLP Annex VI ATP22, SVHC Candidate, REACH Annex XVII, Aromatic Amines (Ent.43), IARC, ED Assessment (ECHA), TEDX, and Oeko-Tex Compliance.
+RESEARCH BATCHING & LOOKUP METHODOLOGY: Before filling any column W–AA, run all database lookups for ALL declared substances at once (CLP Annex VI ATP22, SVHC Candidate, REACH Annex XVII, Aromatic Amines, IARC, ED Assessment, TEDX). Note all results, then fill columns W–AA sequentially. Targeted search — MANDATORY for all database tabs: Step 1 — Search exclusively in the CAS number column of the tab. Use exact match on the CAS number of the substance being checked. Step 2 — Only if no CAS match is found: search exclusively in the substance name / identifier column of the tab (partial match acceptable). Do NOT read entire rows or scan the full table until a match is confirmed. Once a match is found, read only the classification/assessment columns relevant to the lookup. This two-column targeted search applies to all lookup tabs: CLP Annex VI ATP22, SVHC Candidate, REACH Annex XVII, Aromatic Amines (Ent.43), IARC, ED Assessment (ECHA), TEDX.
 
 **W — CMR regulatory status**
 
@@ -735,21 +728,21 @@ Composition undisclosed: – Not verifiable — no CAS numbers | No CMR classifi
 
 **X — Azo dyes / Aromatic amines**
 
-Does any SDS section mention azo dye structure / cleavable aromatic amines / REACH AXVIIEnt.43?
+Assess this endpoint only from evidence found in the SDS, the declared composition and the Aromatic Amines regulatory database.
 
-- Check Aromatic Amines (Ent.43) tab for each declared substance
+Check each declared substance by CAS number first, then by substance name if no CAS number is available.
 
-- 🔴 If listed amine confirmed → C3 trigger
+- 🔴 If a relevant restricted aromatic amine is confirmed → C3 trigger
 
-- 🟠 If Product Type = `Dyeing agent` AND status unverified → M10 trigger
+Format for a confirmed restriction:
 
-Format:
+– 🔴 [Substance] (CAS [X]) | REACH Annex XVII Entry 43 — restricted aromatic amine [Research, Aromatic Amines, MMM YYYY]
 
-- Confirmed restriction: – 🔴 [Substance] (CAS [X]) | REACH Annex XVII Entry 43 — restricted aromatic amine [Research, REACH_AXVII_Ent43]
+If no relevant substance is identified:
 
-- Dye, unverified: – 🟠 Product Type = Dyeing agent — aromatic amine status not stated in SDS | Verification required (EN ISO 14362-1) [Research, REACH_AXVII_Ent43] | TO VERIFY
+– No relevant azo dye or aromatic amine identified in the SDS or database checks [Research, Aromatic Amines, MMM YYYY]
 
-- Not applicable: `– Not stated in SDS | Not a dyeing agent — aromatic amine check not required [SDS §3]`
+Do not infer relevance from textile or non-textile status. Do not use device category, dyeing-agent or fiber-related criteria.
 
 ---
 
@@ -763,7 +756,7 @@ Format:
 
 - Present: – 🟡 Formaldehyde (CAS 50-00-0) | [concentration] — stated [SDS §X] | IARC Group 1 (inhalation route — note only) [Research, IARC_Groups]
 
-Absent: write – Not found — no formaldehyde or formaldehyde-releasing agents identified [SDS §1, §2, §3, §8, §11, §15]. DO NOT write "Not stated" or "No formaldehyde identified". Col Z must never be blank (Rule 6).
+Absent: write – Not found — no formaldehyde or formaldehyde-releasing agents identified [SDS §1, §2, §3, §8, §11, §15]. DO NOT write "Not stated" or "No formaldehyde identified". Col Y must never be blank (Rule 6).
 
 ---
 
@@ -813,7 +806,7 @@ SVHC supplier statement from §15: always cite: `– No SVHC >0.1% — supplier 
 
 ---
 
-### BLOCK 5 — CONCLUSIONS (AC–AF)
+### BLOCK 5 — CONCLUSIONS (AB–AE)
 
 **AB — ALERT LEVEL**
 
@@ -825,9 +818,9 @@ SVHC supplier statement from §15: always cite: `– No SVHC >0.1% — supplier 
 
 **AC — Alert Justification**
 
-AGGREGATION ONLY: Col AD synthesizes EXCLUSIVELY findings already reported in cols G–W and X–AB. Do NOT introduce new hazard data, new substance classifications, or new regulatory findings in AD that were not identified during the G–W/X–AB analysis. Every line in AD must trace back to a specific finding in a specific column.
+AGGREGATION ONLY: Col AC synthesizes EXCLUSIVELY findings already reported in cols F–V and W–AA. Do NOT introduce new hazard data, new substance classifications, or new regulatory findings in AC that were not identified during the F–V/W–AA analysis. Every line in AC must trace back to a specific finding in a specific column.
 
-Group findings by alert level. Use [CRITICAL], [MAJOR], and [MINOR] as section headers — include only levels with triggered criteria. Under each header, list one finding per line (en-dash prefix). Append the SDS age warning (if applicable) as a final standalone line after all level sections. Do NOT use emoji markers (🔴🟠🟡) in this column — the section header replaces them. FORMAT RULE BY SEVERITY — MANDATORY: – CRITICAL and MAJOR entries: include confirmation detail after a pipe separator: – [Endpoint]: [Substance (CAS X)] — [Classification + H-statement] | [confirmation detail or source label] – MINOR entries (simplified): report only the primary classification signal — H-statement, category, and primary source tag. DO NOT append the confirmation chain (e.g., §4.2 descriptions, §11 study references). The full confirming evidence is already recorded in cols G–W. Format: – [Endpoint]: [Substance (CAS X)] — [H-statement + classification] [SDS §X]
+Group findings by alert level. Use [CRITICAL], [MAJOR], and [MINOR] as section headers — include only levels with triggered criteria. Under each header, list one finding per line (en-dash prefix). Append the SDS age warning (if applicable) as a final standalone line after all level sections. Do NOT use emoji markers (🔴🟠🟡) in this column — the section header replaces them. FORMAT RULE BY SEVERITY — MANDATORY: – CRITICAL and MAJOR entries: include confirmation detail after a pipe separator: – [Endpoint]: [Substance (CAS X)] — [Classification + H-statement] | [confirmation detail or source label] – MINOR entries (simplified): report only the primary classification signal — H-statement, category, and primary source tag. DO NOT append the confirmation chain (e.g., §4.2 descriptions, §11 study references). The full confirming evidence is already recorded in cols F–V. Format: – [Endpoint]: [Substance (CAS X)] — [H-statement + classification] [SDS §X]
 
 Format per entry (under its alert level header):
 
@@ -851,9 +844,6 @@ NONE: – No hazard signals detected across all 17 biological endpoints and 5 co
 
 - Undisclosed: `No individual substances identifiable — research not possible | No CMR signal (§2) | No SVHC >0.1% (§15 — supplier statement) | CLP mandatory disclosure applied — limited confidence | ACCEPTABLE (limited data)`
 
-If col AE = `No - <<CLIENT_NAME>> confirmed`:
-
-→ append: `| Patient exposure unlikely — rinsed during process`
 
 If SDS ≥ 3 years old:
 
@@ -865,16 +855,6 @@ If SDS ≥ 3 years old:
 
 Always leave empty. Reserved for the qualified toxicologist reviewer.
 
-**[REMOVED] / Patient contact**
-
-From Step 0B only. Three values:
-
-- `Yes - <<CLIENT_NAME>> confirmed`
-
-- `No - <<CLIENT_NAME>> confirmed`
-
-- `To provide - <<CLIENT_NAME>> classification required`
-
 ---
 
 **AD — Toxicologist Comment**
@@ -885,7 +865,7 @@ Do not write anything in this column under any circumstances.
 
 ---
 
-### BLOCK 6 — ADMIN (AG–AI)
+### BLOCK 6 — ADMIN (AF–AH)
 
 **AF — Analysis Date**
 
@@ -905,21 +885,16 @@ Always write: `Draft`
 
 Only a human reviewer changes this to Validated / Superseded / Archived.
 
-**AI — Row Status**
-
-Always write: `Draft`
-
-Only a human reviewer changes this to Validated / Superseded / Archived.
 
 ---
 
 ## COMPOSITION NOT DISCLOSED — SPECIAL CASE
 
-When col F contains no declared CAS numbers:
+When col E contains no declared CAS numbers:
 
-- Cols G–W: write `MIXTURE (composition undisclosed):` header + assess based on SDS §2 classifications only
+- Cols F–V: write `MIXTURE (composition undisclosed):` header + assess based on SDS §2 classifications only
 
-- Cols X–AB: note `Not verifiable — no CAS numbers` for each research lookup
+- Cols W–AA: note `Not verifiable — no CAS numbers` for each research lookup
 
 - Do NOT escalate to CRITICAL or MAJOR solely because CAS numbers are absent
 
@@ -999,9 +974,8 @@ Date: [DD/MM/YYYY] | Analyst: AI - SDS Screening agent only
 
 [AC] Alert Justification: ...
 
-[AD] Toxicologist Comment: (empty) / Patient contact: ...
+[AD] Toxicologist Comment: (empty)
 
- (empty)
 
 [AF] Analysis Date: ...
 
@@ -1015,9 +989,9 @@ Alert Level : [auto-calculated from markers | or NOT AN SDS]
 
 Key findings : [grouped by level — CRITICAL / MAJOR / MINOR — matching col AC content]
 
-Residual : [AE value]
+Toxicologist comment: [AD value — empty by default]
 
-Actions : [list from AD]
+Corrected alert level: [AE value — empty by default]
 
 ```
 
@@ -1029,15 +1003,13 @@ After completing the analysis and presenting the screening report, apply the fol
 
 1. Write ALL values directly into the Excel file (SDS Analysis tab) WITHOUT asking for confirmation
 
-2. DO NOT write col AC (auto-calculated formula) — except NOT AN SDS
+2. DO NOT write col AB (auto-calculated formula) — except NOT AN SDS
 
-3. DO NOT write col AF (reserved for toxicologist)
+3. DO NOT write cols AD or AE (reserved for toxicologist review)
 
 4. Only pause and ask a question if:
 
 - The SDS document is missing or unreadable
-
-- Product Type is genuinely ambiguous after applying all rules
 
 - Two contradictory pieces of information in SDS require a human choice
 
@@ -1049,21 +1021,23 @@ After completing the analysis and presenting the screening report, apply the fol
 
 ## PRE-SUBMISSION QUALITY CHECKLIST
 
-☐ Every column A–AI has a value — no blanks (col AF: always empty)
+☐ Every applicable column A–AH is populated
 
-☐ Every line starts with `– ` (tiret + space)
+☐ AD is empty and reserved for Toxicologist Comment
 
-☐ Colored markers (🔴🟠🟡) placed before hazard findings only
+☐ AE is empty and reserved for Corrected Alert Level
 
-☐ Col AC NOT written by agent (formula) — except NOT AN SDS
+☐ Every line starts with `– ` (tiret + space), except allowed structural headers in AC
 
-☐ Col AF is empty
+☐ Colored markers (🔴🟠🟡) are placed before hazard findings only
 
-☐ Col AG = today's date in DD/MM/YYYY format
+☐ AB is not written by the agent, except NOT AN SDS
 
-☐ Col AG = exactly AI - SDS Screening agent only
+☐ AF = today's date in DD/MM/YYYY format
 
-☐ Col AH = `Draft`
+☐ AG = exactly `AI - SDS Screening agent only`
+
+☐ AH = `Draft`
 
 ☐ All [SDS §X] citations include section number
 
@@ -1071,16 +1045,16 @@ After completing the analysis and presenting the screening report, apply the fol
 
 ☐ SVHC findings include "TO VERIFY at echa.europa.eu"
 
-☐ Col AE value from Section 4 lookup ONLY — no inference
+☐ Col AE is empty and reserved for toxicologist review
 
 ☐ Composition not disclosed: research cols note "Not verifiable — no CAS numbers"
 
 ☐ SDS ≥ 3 years: warning added in ℹ️ STRUCTURAL LIMITATION: section of col AC
 
-☐ Col AD: no new hazard data introduced that was not reported in cols G–W or X–AB
+☐ Col AC: no new hazard data introduced that was not reported in cols F–V or W–AA
 
-☐ EUH208: sensitising substance identified and named in col H (or flagged as "not named")
+☐ EUH208: sensitising substance identified and named in col G (or flagged as "not named")
 
-☐ pH reported in cols I and J if §9 mentions a pH value
+☐ pH reported in cols H and I if §9 mentions a pH value
 
-☐ §12.5 and §2.3 checked for PBT/vPvB supplier assessment in col R
+☐ §12.5 and §2.3 checked for PBT/vPvB supplier assessment in col Q
