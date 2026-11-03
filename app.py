@@ -330,12 +330,14 @@ def lookup_all_cas(cas_list, dbs):
 
 # ─── Excel helpers ────────────────────────────────────────────────────────────
 def parse_date(s):
-    if not s or str(s).strip() in ("","Not stated","N/A","not stated"):
+    if not s or str(s).strip() in ("", "Not stated", "N/A", "not stated", "—"):
         return str(s) if s else "Not stated"
-    for fmt in ("%d/%m/%Y","%m/%d/%Y","%Y-%m-%d","%d-%m-%Y",
-                "%B %d, %Y","%b %d, %Y","%d %B %Y","%d %b %Y"):
+    if isinstance(s, (datetime.datetime, datetime.date)):
+        return datetime.datetime(s.year, s.month, s.day)
+    for fmt in ("%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y",
+                "%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%d %b %Y"):
         try:
-            return datetime.datetime.strptime(str(s).strip(), fmt).strftime("%b %d, %Y")
+            return datetime.datetime.strptime(str(s).strip(), fmt)
         except Exception:
             pass
     return str(s)
@@ -350,27 +352,26 @@ def compute_alert_level(data):
 
 
 def apply_cf(ws):
-    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="CRITICAL"',   "FF0000", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="MAJOR"',      "E53935", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="MINOR"',      "F57C00", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="NONE"',       "2E7D32", False, False, "FFFFFF"))
-    ws.conditional_formatting.add("AB3:AB9999", fr('$AB3="NOT AN SDS"', "808080", False, False, "FFFFFF"))
-    ws.conditional_formatting.add("A3:AH9999",  fr('$AB3="CRITICAL"', "FFE6E6"))
-    ws.conditional_formatting.add("A3:AH9999",  fr('$AB3="MAJOR"',    "FFE5E5"))
-    ws.conditional_formatting.add("A3:AH9999",  fr('$AB3="MINOR"',    "FFF3E0"))
-    ws.conditional_formatting.add("AG3:AG9999",
-        fr('$AG3="AI - SDS Screening agent only"', "FFF2CC", False, True))
-    ws.conditional_formatting.add("AG3:AG9999",
-        fr('AND($AG3<>"",$AG3<>"AI - SDS Screening agent only")', "E2EFDA"))
-    ws.conditional_formatting.add("AD3:AD9999", fr('$AD3<>""', "E2EFDA", True))
-    ws.conditional_formatting.add("AH3:AH9999", fr('$AH3="Draft"',      "BDD7EE"))
-    ws.conditional_formatting.add("AH3:AH9999", fr('$AH3="Validated"',  "00B050", True, False, "FFFFFF"))
-    ws.conditional_formatting.add("AH3:AH9999", fr('$AH3="Superseded"', "D9D9D9", False, False, "808080"))
-    ws.conditional_formatting.add("AH3:AH9999", fr('$AH3="Archived"',   "595959", False, False, "FFFFFF"))
-    ws.conditional_formatting.add("D3:D9999",
-        fr('AND(D3<>"",ISNUMBER(D3),D3<TODAY()-1095)', "FFE0E0", False, False, "CC0000"))
-    ws.conditional_formatting.add("E3:AC9999", FormulaRule(
-        formula=['NOT(ISERROR(SEARCH("TO VERIFY",E3)))'],
+    if hasattr(ws.conditional_formatting, "_cf_rules"):
+        ws.conditional_formatting._cf_rules.clear()
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="CRITICAL"',   "FF0000", True,  False, "FFFFFF"))
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="MAJOR"',      "E53935", True,  False, "FFFFFF"))
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="MINOR"',      "F57C00", True,  False, "FFFFFF"))
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="NONE"',       "2E7D32", False, False, "FFFFFF"))
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="NOT AN SDS"', "808080", False, False, "FFFFFF"))
+    ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="CRITICAL"', "FFE6E6"))
+    ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="MAJOR"',    "FFE5E5"))
+    ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="MINOR"',    "FFF3E0"))
+    ws.conditional_formatting.add("AG5:AG9999", fr('$AG5="AI - SDS Screening agent only"', "FFF2CC", False, True))
+    ws.conditional_formatting.add("AG5:AG9999", fr('AND($AG5<>"",$AG5<>"AI - SDS Screening agent only")', "E2EFDA"))
+    ws.conditional_formatting.add("AD5:AD9999", fr('$AD5<>""', "E2EFDA", True))
+    ws.conditional_formatting.add("AH5:AH9999", fr('$AH5="Draft"',      "BDD7EE"))
+    ws.conditional_formatting.add("AH5:AH9999", fr('$AH5="Validated"',  "00B050", True, False, "FFFFFF"))
+    ws.conditional_formatting.add("AH5:AH9999", fr('$AH5="Superseded"', "D9D9D9", False, False, "808080"))
+    ws.conditional_formatting.add("AH5:AH9999", fr('$AH5="Archived"',   "595959", False, False, "FFFFFF"))
+    ws.conditional_formatting.add("D5:D9999", fr('AND(D5<>"",ISNUMBER(D5),D5<TODAY()-1095)', "FFE0E0", False, False, "CC0000"))
+    ws.conditional_formatting.add("E5:AB9999", FormulaRule(
+        formula=['NOT(ISERROR(SEARCH("TO VERIFY",E5)))'],
         fill=PatternFill("solid", fgColor="E2CCFF"),
         font=Font(name="Segoe UI Light", size=10),
     ))
@@ -383,107 +384,74 @@ def write_row(wb, data, row):
         if key == "sds_date":
             val = parse_date(str(val)) if val else "Not stated"
         c = ws.cell(row=row, column=cidx(col_letter), value=val)
-        c.fill = DATA_FILL; c.alignment = WRAP_TOP; c.font = seg()
+        # Keep the user's template font, fill, borders and alignment.
+        # Only enforce the Excel date format for the SDS date column.
+        if key == "sds_date":
+            c.number_format = DATE_FMT
 
     ab = ws.cell(row=row, column=cidx("AB"))
     ab.value = (f'=IF(COUNTIF(F{row}:AA{row},"*🔴*")>0,"CRITICAL",'
                 f'IF(COUNTIF(F{row}:AA{row},"*🟠*")>0,"MAJOR",'
                 f'IF(COUNTIF(F{row}:AA{row},"*🟡*")>0,"MINOR","NONE")))')
-    ab.fill = DATA_FILL; ab.alignment = Alignment(horizontal="center", vertical="center"); ab.font = seg(bold=True)
+    # The template already contains the desired alert formatting.
 
-    ws.cell(row=row, column=cidx("AD"), value="").fill = DATA_FILL
-    ws.cell(row=row, column=cidx("AE"), value="").fill = DATA_FILL
+    ws.cell(row=row, column=cidx("AD"), value="")
+    ws.cell(row=row, column=cidx("AE"), value="")
 
     today = datetime.date.today()
     af = ws.cell(row=row, column=cidx("AF"),
                  value=datetime.datetime(today.year, today.month, today.day))
-    af.fill = DATA_FILL; af.alignment = WRAP_TOP; af.font = seg(); af.number_format = DATE_FMT
+    af.number_format = DATE_FMT
 
-    ag = ws.cell(row=row, column=cidx("AG"), value="AI - SDS Screening agent only")
-    ag.fill = DATA_FILL; ag.alignment = WRAP_TOP; ag.font = seg(italic=True)
-
-    ah = ws.cell(row=row, column=cidx("AH"), value="Draft")
-    ah.fill = DATA_FILL; ah.alignment = WRAP_TOP; ah.font = seg()
+    ws.cell(row=row, column=cidx("AG"), value="AI - SDS Screening agent only")
+    ws.cell(row=row, column=cidx("AH"), value="Draft")
 
 
-def extend_dashboard(wb, n):
+def extend_dashboard(wb, analysis_row, dashboard_row):
     if "SDS Dashboard" not in wb.sheetnames:
         return
     ws = wb["SDS Dashboard"]
-    if ws.cell(row=n, column=1).value is not None:
-        return
     formulas = [
-        ("A", f"=ROW()-2"),
-        ("B", f"='SDS Analysis'!$A{n}"),
-        ("C", f"='SDS Analysis'!$B{n}"),
-        ("D", f"='SDS Analysis'!$C{n}"),
-        ("E", f"='SDS Analysis'!$D{n}"),
-        ("F", f"='SDS Analysis'!$AE{n}"),
-        ("G", f"='SDS Analysis'!$AC{n}&IF('SDS Analysis'!$AD{n}<>\"\",CHAR(10)&CHAR(10)&\"Toxicologist comment: \"&'SDS Analysis'!$AD{n},\"\")" ),
-        ("H", f"='SDS Analysis'!$AF{n}"),
-        ("I", f"='SDS Analysis'!$AG{n}"),
-        ("J", f"='SDS Analysis'!$AH{n}"),
+        ("A", f"=ROW()-3"),
+        ("B", f"='SDS Analysis'!$A{analysis_row}"),
+        ("C", f"='SDS Analysis'!$B{analysis_row}"),
+        ("D", f"='SDS Analysis'!$C{analysis_row}"),
+        ("E", f"='SDS Analysis'!$D{analysis_row}"),
+        ("F", f"=IF('SDS Analysis'!$AE{analysis_row}<>\"\",'SDS Analysis'!$AE{analysis_row},'SDS Analysis'!$AB{analysis_row})"),
+        ("G", f"='SDS Analysis'!$AC{analysis_row}&IF('SDS Analysis'!$AD{analysis_row}<>\"\",CHAR(10)&CHAR(10)&\"Toxicologist comment: \"&'SDS Analysis'!$AD{analysis_row},\"\")"),
+        ("H", f"='SDS Analysis'!$AF{analysis_row}"),
+        ("I", f"='SDS Analysis'!$AG{analysis_row}"),
+        ("J", f"='SDS Analysis'!$AH{analysis_row}"),
     ]
     for col_l, val in formulas:
-        c = ws.cell(row=n, column=cidx(col_l), value=val)
-        c.fill = DATA_FILL; c.alignment = WRAP_TOP; c.font = seg()
-        if col_l in ("E","H"):
+        c = ws.cell(row=dashboard_row, column=cidx(col_l), value=val)
+        # Keep the user's Dashboard formatting and table style.
+        if col_l in ("E", "H"):
             c.number_format = DATE_FMT
 
 
-def write_project_tab(wb, config, results):
+def update_project_tab(wb, db_path):
+    """Preserve the user's Project layout and update only the database list."""
     if "Project" not in wb.sheetnames:
-        wb.create_sheet("Project", 0)
+        return
     ws = wb["Project"]
-    ws.delete_rows(1, ws.max_row + 1)
-    blue  = PatternFill("solid", fgColor="007AFF")
-    light = PatternFill("solid", fgColor="EAF4FF")
+    db_dates = get_db_dates(db_path)
+    loaded_sheet_names = {v for k, v in db_dates.items()}
 
-    def row_w(r, a, b="", a_fill=None, a_font=None):
-        ca = ws.cell(row=r, column=1, value=a)
-        cb = ws.cell(row=r, column=2, value=b)
-        ca.fill = a_fill or PatternFill()
-        ca.font = a_font or seg()
-        cb.font = seg()
-        ca.alignment = Alignment(vertical="center", wrap_text=True)
-        cb.alignment = Alignment(vertical="center", wrap_text=True)
+    # The user's template has the database table header on row 16 and data rows 17:24.
+    for row in range(17, 25):
+        ws.cell(row=row, column=1).value = None
+        ws.cell(row=row, column=2).value = None
 
-    row_w(1, "ACONIS BIOCOMPATIBILITY SCREENING — SESSION RECORD",
-          a_fill=blue, a_font=seg(bold=True, color="FFFFFF", size=13))
-    row_w(2, "")
-    row_w(3, "Generated:",    datetime.datetime.now().strftime("%b %d, %Y — %H:%M"))
-    row_w(4, "Tool Version:", "v2.0 — Claude Sonnet 4.5 | ISO 10993-1:2025 / MDR 2017/745")
-    row_w(5, "")
-    row_w(6, "CLIENT", a_fill=blue, a_font=seg(bold=True, color="FFFFFF", size=11))
-    row_w(7, "Client Name:",  config.get("client_name",""))
-    row_w(8, "Client Email:", config.get("client_email",""))
-    row_w(9, "")
-    row_w(10, "ANALYSIS SUMMARY", a_fill=blue, a_font=seg(bold=True, color="FFFFFF", size=11))
-    row_w(11, "Files Processed:", str(len(results)))
-    row_w(12, "")
-
-    hdrs = ["#","SDS ID","Product Name","Supplier","SDS Date","Alert Level","Alert Justification (summary)","Status"]
-    for i, h in enumerate(hdrs, 1):
-        c = ws.cell(row=13, column=i, value=h)
-        c.fill = blue; c.font = seg(bold=True, color="FFFFFF")
-        c.alignment = Alignment(horizontal="center", vertical="center")
-
-    for i, r in enumerate(results, 1):
-        justif = r.get("alert_justification","")
-        tox_comment = r.get("tox_comment","")
-        if tox_comment:
-            justif += f"\n\nToxicologist comment: {tox_comment}"
-        row_data = [i, r.get("sds_id",""), r.get("product",""),
-                    r.get("supplier",""), r.get("sds_date",""),
-                    r.get("alert_level",""), justif,
-                    r.get("status","Draft")]
-        for j, val in enumerate(row_data, 1):
-            c = ws.cell(row=13+i, column=j, value=val)
-            c.fill = light; c.font = seg()
-            c.alignment = Alignment(vertical="top", wrap_text=True)
-
-    for col, w in zip("ABCDEFGH", [6,22,35,25,14,14,60,12]):
-        ws.column_dimensions[col].width = w
+    output_row = 17
+    for sheet_name, display_name in DB_DISPLAY_NAMES:
+        if sheet_name not in loaded_sheet_names:
+            continue
+        ws.cell(row=output_row, column=1).value = display_name
+        ws.cell(row=output_row, column=2).value = normalize_db_version(db_dates.get(sheet_name, "—"))
+        output_row += 1
+        if output_row > 24:
+            break
 
 
 # ─── Prompt builder ───────────────────────────────────────────────────────────
@@ -912,14 +880,15 @@ if run:
                 continue
 
             ws_sds   = wb["SDS Analysis"]
-            next_row = 3
+            next_row = 5
             while ws_sds.cell(row=next_row, column=1).value is not None:
                 next_row += 1
+            dashboard_row = next_row - 1
 
             msg.info("📝 Writing to Excel…")
             prog.progress(90)
             write_row(wb, data, next_row)
-            extend_dashboard(wb, next_row)
+            extend_dashboard(wb, next_row, dashboard_row)
 
             alert_level = compute_alert_level(data)
             results.append({
@@ -956,7 +925,7 @@ if run:
 
     # ── 6. Results summary ────────────────────────────────────────────────────
     if results:
-        write_project_tab(wb, config, results)
+        update_project_tab(wb, DB_FILE)
         buf = io.BytesIO(); wb.save(buf); buf.seek(0)
         excel_bytes = buf.getvalue()
         fname = (f"SDS_Analysis_{config.get('client_name','').replace(' ','_')}"
