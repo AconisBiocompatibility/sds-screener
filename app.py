@@ -489,13 +489,32 @@ def write_project_tab(wb, config, results):
 # ─── Prompt builder ───────────────────────────────────────────────────────────
 def build_system_prompt(base_prompt, config, sds_format="16-section"):
     azo_instr = (
-    "Col X (Azo dyes / Aromatic amines): assess only from evidence in the SDS, "
-    "the declared composition and the Aromatic Amines regulatory database. "
-    "Do not infer relevance from device category, textile status, dyeing-agent "
-    "or fiber-related criteria. If no relevant substance is identified, write "
-    "exactly: `N/A — no relevant azo dye or aromatic amine identified in the "
-    "SDS or database checks [Agent assessment]`."
-)
+        "Col X (Azo dyes / Aromatic amines): assess only from evidence in the SDS, "
+        "the declared composition and the Aromatic Amines regulatory database. "
+        "Do not infer relevance from device category, textile status, dyeing-agent "
+        "or fiber-related criteria. If no relevant substance is identified, write "
+        "exactly: `N/A - no relevant azo dye or aromatic amine identified in the "
+        "SDS or database checks [Agent assessment]`."
+    )
+
+    prompt = base_prompt
+
+    prompt = prompt.replace(
+        "<<CLIENT_NAME>>",
+        config.get("client_name", "CLIENT")
+    )
+    prompt = prompt.replace(
+        "<<DEVICE_DESCRIPTION>>",
+        config.get("device_description", "medical device")
+    )
+    prompt = prompt.replace(
+        "<<CONTACT_SCENARIO>>",
+        "General screening - contact scenario not specified"
+    )
+    prompt = prompt.replace(
+        "<<AZO_DYES_INSTRUCTION>>",
+        azo_instr
+    )
 
     if sds_format == "8-section":
         prompt += MSDS_8_MODIFIER
@@ -786,8 +805,10 @@ if run:
             st.error(f"❌ Fichier manquant : **{n}**")
         st.stop()
 
-    with open(PROMPT_FILE,"r",encoding="utf-8") as f:
-        base_prompt = f.read()
+   with open(PROMPT_FILE, "r", encoding="utf-8") as f:
+    base_prompt = f.read()
+
+system_prompt = build_system_prompt(base_prompt, config, sds_format)
 
     with st.spinner("Loading databases…"):
         with open(DB_FILE,"rb") as f:
