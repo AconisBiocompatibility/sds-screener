@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Alignment, Font
 from openpyxl.utils import column_index_from_string
 from openpyxl.formatting.rule import FormulaRule
+from openpyxl.drawing.image import Image as XLImage
 import pandas as pd
 import json, io, datetime, re, os, traceback, base64, smtplib
 from email.mime.multipart import MIMEMultipart
@@ -395,6 +396,87 @@ def enforce_report_formatting(wb):
                     a.vertical = "top"
                     a.wrap_text = True
                     cell.alignment = a
+
+
+def add_report_logos(wb):
+    """Embed the ACONIS logo as a real Excel image on each report sheet."""
+    logo_bytes = base64.b64decode(LOGO_B64)
+    for sheet_name in ("Project", "SDS Dashboard", "SDS Analysis"):
+        ws = wb.get(sheet_name)
+        if ws is None:
+            continue
+        ws["A1"].value = None
+        ws._images = []
+        img = XLImage(io.BytesIO(logo_bytes))
+        img.width = 125
+        img.height = 38
+        img.anchor = "A1"
+        ws.add_image(img)
+
+
+def fit_row_height(ws, row, first_col, last_col, min_height=22, max_height=420):
+    """Estimate a readable row height from wrapped cell contents."""
+    lines = 1
+    for col in range(first_col, last_col + 1):
+        value = ws.cell(row, col).value
+        if value in (None, ""):
+            continue
+        width = ws.column_dimensions[ws.cell(row, col).column_letter].width or 10
+        chars_per_line = max(12, int(width * 1.05))
+        text = str(value)
+        for paragraph in text.split("\n"):
+            lines = max(lines, max(1, len(paragraph) // chars_per_line + 1))
+    ws.row_dimensions[row].height = min(max_height, max(min_height, lines * 14.5))
+
+
+def apply_table_font_and_alignment(wb):
+    """Set table font size 10, titles size 11, top-left wrapped data."""
+    from copy import copy
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is not None or cell.has_style:
+                    f = copy(cell.font)
+                    f.name = "Segoe UI Light"
+                    if ws.title in ("SDS Dashboard", "SDS Analysis") and cell.row >= (4 if ws.title == "SDS Dashboard" else 4):
+                        f.sz = 10
+                    cell.font = f
+        if ws.title == "Project":
+            for r in range(17, 25):
+                for c in range(1, 3):
+                    cell = ws.cell(r, c)
+                    a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
+                    cell.alignment = a
+                    f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
+                fit_row_height(ws, r, 1, 2)
+        elif ws.title == "SDS Dashboard":
+            for r in range(4, ws.max_row + 1):
+                for c in range(1, 11):
+                    cell = ws.cell(r, c)
+                    a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
+                    cell.alignment = a
+                    f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
+                fit_row_height(ws, r, 1, 10)
+        elif ws.title == "SDS Analysis":
+            for r in range(5, ws.max_row + 1):
+                for c in range(1, 35):
+                    cell = ws.cell(r, c)
+                    a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
+                    cell.alignment = a
+                    f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
+                fit_row_height(ws, r, 1, 34)
+        if ws.title in ("Project", "SDS Dashboard", "SDS Analysis"):
+            for coord in ("B1",):
+                f = copy(ws[coord].font); f.name = "Segoe UI Light"; f.sz = 11; ws[coord].font = f
+        if ws.title == "SDS Analysis":
+            ws.column_dimensions["AF"].width = max(ws.column_dimensions["AF"].width or 0, 15)
+            ws.column_dimensions["AG"].width = max(ws.column_dimensions["AG"].width or 0, 24)
+            ws.column_dimensions["AH"].width = max(ws.column_dimensions["AH"].width or 0, 14)
+        elif ws.title == "SDS Dashboard":
+            ws.column_dimensions["E"].width = max(ws.column_dimensions["E"].width or 0, 15)
+            ws.column_dimensions["H"].width = max(ws.column_dimensions["H"].width or 0, 15)
+            ws.column_dimensions["I"].width = max(ws.column_dimensions["I"].width or 0, 24)
+            ws.column_dimensions["J"].width = max(ws.column_dimensions["J"].width or 0, 14)
 
 
 def apply_cf(ws):
@@ -977,6 +1059,14 @@ if run:
     if results:
         update_project_tab(wb, DB_FILE)
         enforce_report_formatting(wb)
+        apply_table_font_and_alignment(wb)
+        add_report_logos(wb)
+        try:
+            wb.calculation.fullCalcOnLoad = True
+            wb.calculation.forceFullCalc = True
+            wb.calculation.calcMode = "auto"
+        except Exception:
+            pass
         buf = io.BytesIO(); wb.save(buf); buf.seek(0)
         excel_bytes = buf.getvalue()
         fname = (f"SDS_Analysis_{config.get('client_name','').replace(' ','_')}"
