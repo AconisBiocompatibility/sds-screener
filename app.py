@@ -1104,6 +1104,7 @@ if run:
             data=excel_bytes, file_name=fname,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary", use_container_width=True,
+            on_click="ignore",
         )
 
 # ─── Footer ───────────────────────────────────────────────────────────────────
