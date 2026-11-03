@@ -351,6 +351,52 @@ def compute_alert_level(data):
     return "NONE"
 
 
+def copy_row_format(ws, source_row, target_row):
+    """Repeat the first data-row formatting on subsequent table rows."""
+    from copy import copy
+    ws.row_dimensions[target_row].height = ws.row_dimensions[source_row].height
+    for col in range(1, ws.max_column + 1):
+        src = ws.cell(source_row, col)
+        dst = ws.cell(target_row, col)
+        dst._style = copy(src._style)
+        dst.font = copy(src.font)
+        dst.fill = copy(src.fill)
+        dst.border = copy(src.border)
+        dst.alignment = copy(src.alignment)
+        dst.number_format = src.number_format
+        dst.protection = copy(src.protection)
+
+
+def enforce_report_formatting(wb):
+    """Apply Segoe UI Light and top-left wrapping to all report data tables."""
+    from copy import copy
+    from openpyxl.styles import Alignment
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is not None or cell.has_style:
+                    f = copy(cell.font)
+                    f.name = "Segoe UI Light"
+                    cell.font = f
+        if ws.title == "Project":
+            ranges = ((17, 24, 1, 2),)
+        elif ws.title == "SDS Dashboard":
+            ranges = ((4, max(4, ws.max_row), 1, 10),)
+        elif ws.title == "SDS Analysis":
+            ranges = ((5, max(5, ws.max_row), 1, 34),)
+        else:
+            ranges = ()
+        for r1, r2, c1, c2 in ranges:
+            for r in range(r1, r2 + 1):
+                for c in range(c1, c2 + 1):
+                    cell = ws.cell(r, c)
+                    a = copy(cell.alignment)
+                    a.horizontal = "left"
+                    a.vertical = "top"
+                    a.wrap_text = True
+                    cell.alignment = a
+
+
 def apply_cf(ws):
     if hasattr(ws.conditional_formatting, "_cf_rules"):
         ws.conditional_formatting._cf_rules.clear()
@@ -379,6 +425,8 @@ def apply_cf(ws):
 
 def write_row(wb, data, row):
     ws = wb["SDS Analysis"]
+    if row > 5:
+        copy_row_format(ws, 5, row)
     for col_letter, key in COLS:
         val = data.get(key,"")
         if key == "sds_date":
@@ -411,6 +459,8 @@ def extend_dashboard(wb, analysis_row, dashboard_row):
     if "SDS Dashboard" not in wb.sheetnames:
         return
     ws = wb["SDS Dashboard"]
+    if dashboard_row > 4:
+        copy_row_format(ws, 4, dashboard_row)
     formulas = [
         ("A", f"=ROW()-3"),
         ("B", f"='SDS Analysis'!$A{analysis_row}"),
@@ -436,7 +486,7 @@ def update_project_tab(wb, db_path):
         return
     ws = wb["Project"]
     db_dates = get_db_dates(db_path)
-    loaded_sheet_names = {v for k, v in db_dates.items()}
+    loaded_sheet_names = set(db_dates.keys())
 
     # The user's template has the database table header on row 16 and data rows 17:24.
     for row in range(17, 25):
@@ -926,6 +976,7 @@ if run:
     # ── 6. Results summary ────────────────────────────────────────────────────
     if results:
         update_project_tab(wb, DB_FILE)
+        enforce_report_formatting(wb)
         buf = io.BytesIO(); wb.save(buf); buf.seek(0)
         excel_bytes = buf.getvalue()
         fname = (f"SDS_Analysis_{config.get('client_name','').replace(' ','_')}"
