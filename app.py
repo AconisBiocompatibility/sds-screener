@@ -1,4 +1,3 @@
-template_aligned.py
 #!/usr/bin/env python3
 """SDS Biocompatibility Screening Tool — ACONIS | ISO 10993-1:2025"""
 
