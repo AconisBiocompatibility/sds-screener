@@ -6,7 +6,7 @@ import anthropic
 import fitz
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
-from openpyxl.utils import column_index_from_string
+from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.formatting.rule import FormulaRule, CellIsRule
 from openpyxl.drawing.image import Image as XLImage
 import pandas as pd
@@ -452,13 +452,17 @@ def apply_table_font_and_alignment(wb):
                         f.sz = 10
                     cell.font = f
         if ws.title == "SDS Analysis":
-            # Apply the table font to blank cells too, including reserved AD/AE.
+            # Apply the table font to every cell, including blank cells and the
+            # previously inconsistent ranges E:V and AC:AE.
             for r in range(3, ws.max_row + 1):
                 for c in range(1, 35):
                     f = copy(ws.cell(r, c).font)
                     f.name = "Segoe UI Light"
                     f.sz = 10
                     ws.cell(r, c).font = f
+            # Requested width: E through AA inclusive.
+            for c in range(5, 28):
+                ws.column_dimensions[get_column_letter(c)].width = 36
         if ws.title == "Project":
             last_row = max(16, last_populated_row(ws, 17, 2))
             for r in range(17, last_row + 1):
@@ -496,6 +500,9 @@ def apply_table_font_and_alignment(wb):
             ws.column_dimensions["AF"].width = max(ws.column_dimensions["AF"].width or 0, 15)
             ws.column_dimensions["AG"].width = max(ws.column_dimensions["AG"].width or 0, 24)
             ws.column_dimensions["AH"].width = max(ws.column_dimensions["AH"].width or 0, 14)
+            last_row = last_populated_row(ws, 5, 34)
+            for r in range(5, last_row + 1):
+                fit_row_height(ws, r, 1, 34)
         elif ws.title == "SDS Dashboard":
             ws.column_dimensions["E"].width = max(ws.column_dimensions["E"].width or 0, 15)
             ws.column_dimensions["H"].width = max(ws.column_dimensions["H"].width or 0, 15)
@@ -535,6 +542,26 @@ def set_alert_cell_style(cell, alert):
     cell.fill = PatternFill("solid", fgColor=fill_hex)
     cell.font = Font(name="Segoe UI Light", size=10, bold=True, color=font_hex)
     cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+
+
+def force_dashboard_font(ws, first_row=4, last_row=None):
+    """Force Dashboard table formatting only on populated SDS rows."""
+    from copy import copy
+    if last_row is None:
+        last_row = ws.max_row
+    for row in range(first_row, last_row + 1):
+        for col in range(1, 11):
+            cell = ws.cell(row, col)
+            f = copy(cell.font)
+            f.name = "Segoe UI Light"
+            f.sz = 10
+            cell.font = f
+            a = copy(cell.alignment)
+            a.horizontal = "left"
+            a.vertical = "top"
+            a.wrap_text = True
+            cell.alignment = a
+            fit_row_height(ws, row, 1, 10)
 
 
 def apply_cf(ws):
@@ -1125,7 +1152,10 @@ if run:
         update_project_tab(wb, DB_FILE)
         enforce_report_formatting(wb)
         apply_table_font_and_alignment(wb)
+        # Format only the SDS data rows: row 5 for the first SDS, then one
+        # additional row for each additional SDS.
         force_sds_analysis_font(wb["SDS Analysis"], 5, 4 + len(results))
+        force_dashboard_font(wb["SDS Dashboard"], 4, 3 + len(results))
         add_report_logos(wb)
         try:
             wb.calculation.fullCalcOnLoad = True
