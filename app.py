@@ -7,7 +7,7 @@ import fitz
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
 from openpyxl.utils import column_index_from_string
-from openpyxl.formatting.rule import FormulaRule
+from openpyxl.formatting.rule import FormulaRule, CellIsRule
 from openpyxl.drawing.image import Image as XLImage
 import pandas as pd
 import json, io, datetime, re, os, traceback, base64, smtplib
@@ -503,14 +503,52 @@ def apply_table_font_and_alignment(wb):
             ws.column_dimensions["J"].width = max(ws.column_dimensions["J"].width or 0, 14)
 
 
+def force_sds_analysis_font(ws, first_row=5, last_row=None):
+    """Final pass: force Segoe UI Light 10 on every A:AH table cell."""
+    from copy import copy
+    if last_row is None:
+        last_row = ws.max_row
+    for row in range(first_row, last_row + 1):
+        for col in range(1, 35):
+            cell = ws.cell(row, col)
+            f = copy(cell.font)
+            f.name = "Segoe UI Light"
+            f.sz = 10
+            cell.font = f
+            a = copy(cell.alignment)
+            a.horizontal = "left"
+            a.vertical = "top"
+            a.wrap_text = True
+            cell.alignment = a
+
+
+def set_alert_cell_style(cell, alert):
+    """Apply a visible alert style immediately, independent of Excel recalculation."""
+    colors = {
+        "CRITICAL": ("FF0000", "FFFFFF"),
+        "MAJOR": ("E53935", "FFFFFF"),
+        "MINOR": ("F57C00", "FFFFFF"),
+        "NONE": ("00B050", "FFFFFF"),
+        "NOT AN SDS": ("808080", "FFFFFF"),
+    }
+    fill_hex, font_hex = colors.get(str(alert), ("FFFFFF", "000000"))
+    cell.fill = PatternFill("solid", fgColor=fill_hex)
+    cell.font = Font(name="Segoe UI Light", size=10, bold=True, color=font_hex)
+    cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+
+
 def apply_cf(ws):
     if hasattr(ws.conditional_formatting, "_cf_rules"):
         ws.conditional_formatting._cf_rules.clear()
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="CRITICAL"',   "FF0000", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="MAJOR"',      "E53935", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="MINOR"',      "F57C00", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="NONE"',       "2E7D32", False, False, "FFFFFF"))
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="NOT AN SDS"', "808080", False, False, "FFFFFF"))
+    for value, fill_hex in (("CRITICAL", "FF0000"), ("MAJOR", "E53935"),
+                            ("MINOR", "F57C00"), ("NONE", "00B050"),
+                            ("NOT AN SDS", "808080")):
+        ws.conditional_formatting.add(
+            "AB5:AB9999",
+            CellIsRule(operator="equal", formula=[f'"{value}"'],
+                       fill=PatternFill("solid", fgColor=fill_hex),
+                       font=Font(name="Segoe UI Light", size=10, bold=True, color="FFFFFF"))
+        )
     ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="CRITICAL"', "FFE6E6"))
     ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="MAJOR"',    "FFE5E5"))
     ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="MINOR"',    "FFF3E0"))
@@ -547,7 +585,7 @@ def write_row(wb, data, row):
     # Calculate the alert in Python so Excel does not depend on recalculation
     # or localized French/English formula syntax when the file is opened.
     ab.value = compute_alert_level(data)
-    # The template's conditional formatting colors this value.
+    set_alert_cell_style(ab, ab.value)
 
     ws.cell(row=row, column=cidx("AD"), value="")
     ws.cell(row=row, column=cidx("AE"), value="")
@@ -583,6 +621,8 @@ def extend_dashboard(wb, analysis_row, dashboard_row):
     for col_l, val in formulas:
         c = ws.cell(row=dashboard_row, column=cidx(col_l), value=val)
         # Keep the user's Dashboard formatting and table style.
+        if col_l == "F":
+            set_alert_cell_style(c, val)
         if col_l in ("E", "H"):
             c.number_format = DATE_FMT
 
@@ -1085,6 +1125,7 @@ if run:
         update_project_tab(wb, DB_FILE)
         enforce_report_formatting(wb)
         apply_table_font_and_alignment(wb)
+        force_sds_analysis_font(wb["SDS Analysis"], 5, 4 + len(results))
         add_report_logos(wb)
         try:
             wb.calculation.fullCalcOnLoad = True
