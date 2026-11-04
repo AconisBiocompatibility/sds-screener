@@ -451,6 +451,14 @@ def apply_table_font_and_alignment(wb):
                     if ws.title in ("SDS Dashboard", "SDS Analysis") and cell.row >= (4 if ws.title == "SDS Dashboard" else 4):
                         f.sz = 10
                     cell.font = f
+        if ws.title == "SDS Analysis":
+            # Apply the table font to blank cells too, including reserved AD/AE.
+            for r in range(3, ws.max_row + 1):
+                for c in range(1, 35):
+                    f = copy(ws.cell(r, c).font)
+                    f.name = "Segoe UI Light"
+                    f.sz = 10
+                    ws.cell(r, c).font = f
         if ws.title == "Project":
             last_row = max(16, last_populated_row(ws, 17, 2))
             for r in range(17, last_row + 1):
@@ -536,10 +544,10 @@ def write_row(wb, data, row):
             c.number_format = DATE_FMT
 
     ab = ws.cell(row=row, column=cidx("AB"))
-    ab.value = (f'=IF(COUNTIF(F{row}:AA{row},"*🔴*")>0,"CRITICAL",'
-                f'IF(COUNTIF(F{row}:AA{row},"*🟠*")>0,"MAJOR",'
-                f'IF(COUNTIF(F{row}:AA{row},"*🟡*")>0,"MINOR","NONE")))')
-    # The template already contains the desired alert formatting.
+    # Calculate the alert in Python so Excel does not depend on recalculation
+    # or localized French/English formula syntax when the file is opened.
+    ab.value = compute_alert_level(data)
+    # The template's conditional formatting colors this value.
 
     ws.cell(row=row, column=cidx("AD"), value="")
     ws.cell(row=row, column=cidx("AE"), value="")
@@ -565,7 +573,8 @@ def extend_dashboard(wb, analysis_row, dashboard_row):
         ("C", f"='SDS Analysis'!$B{analysis_row}"),
         ("D", f"='SDS Analysis'!$C{analysis_row}"),
         ("E", f"='SDS Analysis'!$D{analysis_row}"),
-        ("F", f"=IF('SDS Analysis'!$AE{analysis_row}<>\"\",'SDS Analysis'!$AE{analysis_row},'SDS Analysis'!$AB{analysis_row})"),
+        ("F", (wb["SDS Analysis"].cell(analysis_row, cidx("AE")).value
+                or wb["SDS Analysis"].cell(analysis_row, cidx("AB")).value)),
         ("G", f"='SDS Analysis'!$AC{analysis_row}&IF('SDS Analysis'!$AD{analysis_row}<>\"\",CHAR(10)&CHAR(10)&\"Toxicologist comment: \"&'SDS Analysis'!$AD{analysis_row},\"\")"),
         ("H", f"='SDS Analysis'!$AF{analysis_row}"),
         ("I", f"='SDS Analysis'!$AG{analysis_row}"),
