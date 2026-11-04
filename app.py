@@ -429,6 +429,14 @@ def fit_row_height(ws, row, first_col, last_col, min_height=22, max_height=420):
     ws.row_dimensions[row].height = min(max_height, max(min_height, lines * 14.5))
 
 
+def last_populated_row(ws, first_row, last_col):
+    """Return the last row containing a value in the report table."""
+    for row in range(ws.max_row, first_row - 1, -1):
+        if any(ws.cell(row, col).value not in (None, "") for col in range(1, last_col + 1)):
+            return row
+    return first_row - 1
+
+
 def apply_table_font_and_alignment(wb):
     """Set table font size 10, titles size 11, top-left wrapped data."""
     from copy import copy
@@ -444,7 +452,8 @@ def apply_table_font_and_alignment(wb):
                         f.sz = 10
                     cell.font = f
         if ws.title == "Project":
-            for r in range(17, 25):
+            last_row = max(16, last_populated_row(ws, 17, 2))
+            for r in range(17, last_row + 1):
                 for c in range(1, 3):
                     cell = ws.cell(r, c)
                     a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
@@ -453,7 +462,8 @@ def apply_table_font_and_alignment(wb):
                     f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
                 fit_row_height(ws, r, 1, 2)
         elif ws.title == "SDS Dashboard":
-            for r in range(4, ws.max_row + 1):
+            last_row = last_populated_row(ws, 4, 10)
+            for r in range(4, last_row + 1):
                 for c in range(1, 11):
                     cell = ws.cell(r, c)
                     a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
@@ -462,7 +472,8 @@ def apply_table_font_and_alignment(wb):
                     f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
                 fit_row_height(ws, r, 1, 10)
         elif ws.title == "SDS Analysis":
-            for r in range(5, ws.max_row + 1):
+            last_row = last_populated_row(ws, 5, 34)
+            for r in range(5, last_row + 1):
                 for c in range(1, 35):
                     cell = ws.cell(r, c)
                     a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
