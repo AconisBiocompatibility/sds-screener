@@ -6,7 +6,7 @@ import anthropic
 import fitz
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
-from openpyxl.utils import column_index_from_string
+from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.drawing.image import Image as XLImage
 import pandas as pd
@@ -470,6 +470,13 @@ def apply_table_font_and_alignment(wb):
             for coord in ("B1",):
                 f = copy(ws[coord].font); f.name = "Segoe UI Light"; f.sz = 11; ws[coord].font = f
         if ws.title == "SDS Analysis":
+            # Restore the readable layout for the long SDS analysis fields.
+            # The template defaults many of these columns to width 13.
+            for col_idx in range(5, 28):  # E:AA
+                ws.column_dimensions[get_column_letter(col_idx)].width = 36
+
+            # AB contains CRITICAL / MAJOR / MINOR / NONE.
+            ws.column_dimensions["AB"].width = 18
             ws.column_dimensions["AF"].width = max(ws.column_dimensions["AF"].width or 0, 15)
             ws.column_dimensions["AG"].width = max(ws.column_dimensions["AG"].width or 0, 24)
             ws.column_dimensions["AH"].width = max(ws.column_dimensions["AH"].width or 0, 14)
@@ -521,10 +528,22 @@ def write_row(wb, data, row):
             c.number_format = DATE_FMT
 
     ab = ws.cell(row=row, column=cidx("AB"))
-    ab.value = (f'=IF(COUNTIF(F{row}:AA{row},"*🔴*")>0,"CRITICAL",'
-                f'IF(COUNTIF(F{row}:AA{row},"*🟠*")>0,"MAJOR",'
-                f'IF(COUNTIF(F{row}:AA{row},"*🟡*")>0,"MINOR","NONE")))')
-    # The template already contains the desired alert formatting.
+    # Write the calculated value directly, rather than relying on Excel
+    # recalculation or on the user's Excel language settings.
+    alert_level = compute_alert_level(data)
+    ab.value = alert_level
+    alert_style = {
+        "CRITICAL": ("FF0000", "FFFFFF"),
+        "MAJOR": ("E53935", "FFFFFF"),
+        "MINOR": ("F57C00", "FFFFFF"),
+        "NONE": ("2E7D32", "FFFFFF"),
+        "NOT AN SDS": ("808080", "FFFFFF"),
+    }.get(alert_level)
+    if alert_style:
+        fill_hex, font_hex = alert_style
+        ab.fill = PatternFill("solid", fgColor=fill_hex)
+        ab.font = Font(name="Segoe UI Light", size=10, bold=True, color=font_hex)
+        ab.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
 
     ws.cell(row=row, column=cidx("AD"), value="")
     ws.cell(row=row, column=cidx("AE"), value="")
@@ -642,13 +661,14 @@ Use EXACTLY these keys. Values must include all markers (🔴🟠🟡), source t
 # ─── Email ─────────────────────────────────────────────────────────────────────
 
 # ── Notion registration helpers ────────────────────────────────────────────────
-def _notion_register(first_name: str, last_name: str, company: str, email: str) -> bool:
+def _notion_register(first_name: str, last_name: str, company: str, email: str):
+    """Create one Notion row for this trial and return its page ID."""
     import requests as _req
     from datetime import datetime, timezone
     token = st.secrets.get("NOTION_TOKEN", "")
     db_id = st.secrets.get("NOTION_DB_ID", "")
     if not token or not db_id:
-        return True
+        return True, None
     admin = st.secrets.get("ADMIN_EMAIL", "elodie.saudrais@aconis.fr")
     role  = "Admin" if email.strip().lower() == admin.strip().lower() else "Beta tester"
     payload = {
@@ -671,19 +691,19 @@ def _notion_register(first_name: str, last_name: str, company: str, email: str) 
                      "Notion-Version": "2022-06-28"},
             json=payload, timeout=10,
         )
-        return r.status_code in (200, 201)
+        if r.status_code in (200, 201):
+            return True, r.json().get("id")
+        return False, None
     except Exception:
-        return True
+        return True, None
 
 
 def _notion_submit_feedback(email: str, company: str, rating: int, comments: str):
-    """Create one feedback page without changing the existing user database."""
+    """Update the registration row for this trial with its feedback."""
     import requests as _req
     from datetime import datetime, timezone
 
     token = st.secrets.get("NOTION_TOKEN", "")
-    # Feedback uses the existing SDS Screener database. A separate feedback
-    # database ID is optional for backward compatibility, but not required.
     db_id = st.secrets.get("NOTION_FEEDBACK_DB_ID", "") or st.secrets.get("NOTION_DB_ID", "")
     if not token or not db_id:
         return False, "Feedback is not configured yet. Please ask the administrator to set NOTION_TOKEN and NOTION_DB_ID."
@@ -702,9 +722,6 @@ def _notion_submit_feedback(email: str, company: str, rating: int, comments: str
             return False, "The SDS Screener Notion database could not be accessed. Check NOTION_DB_ID and Notion permissions."
         properties = schema_response.json().get("properties", {})
 
-        # The existing SDS Screener database already has Name as its title
-        # property. Feedback entries therefore use Name as the required title,
-        # while Feedback stores the feedback type/label.
         required = ["Name", "Email", "Rating", "Submitted at"]
         missing = [name for name in required if name not in properties]
         if missing:
@@ -729,28 +746,70 @@ def _notion_submit_feedback(email: str, company: str, rating: int, comments: str
                 return {"date": {"start": value}}
             return None
 
+        # The registration page ID is stored in session state, so feedback is
+        # attached to the exact trial that produced it. For an older session,
+        # recover the most recently created row for the same email.
+        page_id = st.session_state.get("notion_page_id", "")
+        if not page_id:
+            query = {
+                "filter": {"property": "Email", "email": {"equals": email}},
+                "sorts": [{"timestamp": "created_time", "direction": "descending"}],
+                "page_size": 1,
+            }
+            q = _req.post(
+                f"https://api.notion.com/v1/databases/{db_id}/query",
+                headers=headers, json=query, timeout=10,
+            )
+            if q.status_code == 200:
+                rows = q.json().get("results", [])
+                if rows:
+                    page_id = rows[0].get("id", "")
+
         now = datetime.now(timezone.utc).isoformat()
-        payload_properties = {}
         values = {
-            "Name": f"SDS Screener feedback - {company or email} - {now[:10]}",
             "Feedback": "Beta tester feedback",
-            "Email": email,
-            "Company": company,
             "Rating": rating,
             "Comments": comments.strip(),
             "Submitted at": now,
             "App version": "v2.0",
         }
+        payload_properties = {}
         for name, value in values.items():
             if name in properties:
                 encoded = property_value(name, value)
                 if encoded is not None:
                     payload_properties[name] = encoded
 
+        if page_id:
+            response = _req.patch(
+                f"https://api.notion.com/v1/pages/{page_id}",
+                headers=headers,
+                json={"properties": payload_properties},
+                timeout=10,
+            )
+            if response.status_code in (200, 201):
+                return True, "Thank you for your feedback."
+            return False, "Feedback could not be saved in the trial row in Notion. Please try again later."
+
+        # Fallback only if the registration row cannot be found. This still
+        # creates one complete trial row, rather than a feedback-only row.
+        fallback_values = {
+            "Name": f"SDS Screener trial - {company or email} - {now[:10]}",
+            "Email": email,
+            "Company": company,
+            "Role": "Beta tester",
+            **values,
+        }
+        create_properties = {}
+        for name, value in fallback_values.items():
+            if name in properties:
+                encoded = property_value(name, value)
+                if encoded is not None:
+                    create_properties[name] = encoded
         response = _req.post(
             "https://api.notion.com/v1/pages",
             headers=headers,
-            json={"parent": {"database_id": db_id}, "properties": payload_properties},
+            json={"parent": {"database_id": db_id}, "properties": create_properties},
             timeout=10,
         )
         if response.status_code in (200, 201):
@@ -758,7 +817,6 @@ def _notion_submit_feedback(email: str, company: str, rating: int, comments: str
         return False, "Feedback could not be saved in Notion. Please try again later."
     except Exception:
         return False, "Feedback could not be saved in Notion. The analysis and Excel download remain available."
-
 
 def _show_registration_gate():
     st.markdown(
@@ -796,8 +854,11 @@ def _show_registration_gate():
                 st.error("Please enter a valid email address.")
             else:
                 with st.spinner("Registering…"):
-                    _notion_register(first_name.strip(), last_name.strip(),
-                                     company.strip(), email.strip())
+                    registration_ok, notion_page_id = _notion_register(
+                        first_name.strip(), last_name.strip(),
+                        company.strip(), email.strip()
+                    )
+                st.session_state["notion_page_id"] = notion_page_id or ""
                 st.session_state["registered"]     = True
                 st.session_state["reg_first_name"] = first_name.strip()
                 st.session_state["reg_last_name"]  = last_name.strip()
