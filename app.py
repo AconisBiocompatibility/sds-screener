@@ -879,11 +879,24 @@ html, body, [class*="css"] { font-family: 'Segoe UI Light', 'Helvetica Neue', sa
 [data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3 { color: #007AFF; }
 h1 { color: #007AFF !important; font-weight: 300; }
 h2, h3 { color: #007AFF; font-weight: 300; }
-.stButton > button[kind="primary"] {
-    background-color: #007AFF !important; border: none;
-    font-family: 'Segoe UI Light', sans-serif; letter-spacing: 0.03em;
+.stButton > button[kind="primary"],
+.stDownloadButton > button,
+[data-testid="stFormSubmitButton"] > button,
+button[data-testid="baseButton-primary"] {
+    background-color: #007AFF !important;
+    color: #FFFFFF !important;
+    border: 1px solid #007AFF !important;
+    font-family: 'Segoe UI Light', sans-serif;
+    letter-spacing: 0.03em;
 }
-.stButton > button[kind="primary"]:hover { background-color: #005FCC !important; }
+.stButton > button[kind="primary"]:hover,
+.stDownloadButton > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover,
+button[data-testid="baseButton-primary"]:hover {
+    background-color: #005FCC !important;
+    border-color: #005FCC !important;
+    color: #FFFFFF !important;
+}
 .footer-aconis {
     margin-top: 40px; padding: 18px 0 8px 0;
     border-top: 1px solid #DCE8FF; color: #888;
@@ -985,6 +998,55 @@ if "last_excel_bytes" not in st.session_state:
     st.session_state["last_excel_bytes"] = None
 if "last_excel_name" not in st.session_state:
     st.session_state["last_excel_name"] = None
+
+def _section_title(text):
+    st.markdown(
+        f"<h2 style='color:#007AFF;font-weight:700;margin:24px 0 4px 0;'>{text}</h2>",
+        unsafe_allow_html=True,
+    )
+
+def _build_results_table(results):
+    thead = (
+        '<table style="width:100%;border-collapse:collapse;'
+        'border:1px solid #DCE8FF;font-family:Segoe UI Light,Arial,sans-serif;">'
+        '<thead><tr style="background:#007AFF;color:#fff;text-align:left;">'
+        '<th style="padding:10px 8px;width:36px;">#</th>'
+        '<th style="padding:10px 8px;width:130px;">SDS ID</th>'
+        '<th style="padding:10px 8px;width:170px;">Product</th>'
+        '<th style="padding:10px 8px;width:130px;">Supplier</th>'
+        '<th style="padding:10px 8px;width:95px;">SDS Date</th>'
+        '<th style="padding:10px 8px;width:105px;">Alert Level</th>'
+        '<th style="padding:10px 8px;">Alert Justification</th>'
+        '</tr></thead><tbody>'
+    )
+    rows = []
+    for i, r in enumerate(results):
+        lvl = r["alert_level"]
+        bg, fg, emoji = ALERT_COLORS.get(lvl, ("#888", "#fff", "⚠️"))
+        badge = (
+            '<span style="background:' + bg + ';color:' + fg + ';'
+            'padding:3px 10px;border-radius:4px;font-size:0.82em;'
+            'font-weight:600;white-space:nowrap;">' + emoji + ' ' + lvl + '</span>'
+        )
+        justif_html = r.get("alert_justification", "").replace("\n", "<br>")
+        row_bg = (
+            "#FFF8F8" if lvl == "CRITICAL" else
+            "#FFE5E5" if lvl == "MAJOR" else
+            "#FFF3E0" if lvl == "MINOR" else
+            "#F5FFF8" if lvl == "NONE" else "#F5F5F5"
+        )
+        rows.append(
+            '<tr style="background:' + row_bg + ';vertical-align:top;border-bottom:1px solid #EEF4FF;">'
+            '<td style="padding:10px 8px;text-align:center;color:#666;font-size:0.85em;">' + str(i+1) + '</td>'
+            '<td style="padding:10px 8px;font-size:0.82em;color:#444;word-break:break-all;">' + str(r.get("sds_id", "") or "—") + '</td>'
+            '<td style="padding:10px 8px;font-weight:600;color:#222;">' + str(r.get("product", "") or "—") + '</td>'
+            '<td style="padding:10px 8px;color:#444;">' + str(r.get("supplier", "") or "—") + '</td>'
+            '<td style="padding:10px 8px;color:#444;white-space:nowrap;">' + str(r.get("sds_date", "") or "—") + '</td>'
+            '<td style="padding:10px 8px;text-align:center;">' + badge + '</td>'
+            '<td style="padding:10px 8px;font-size:0.85em;color:#333;line-height:1.6;">' + justif_html + '</td>'
+            '</tr>'
+        )
+    return thead + "".join(rows) + "</tbody></table>"
 
 # ── 1. SDS Upload ─────────────────────────────────────────────────────────────
 st.markdown(
@@ -1210,55 +1272,11 @@ if run:
         st.session_state["last_excel_name"] = fname
 
         st.divider()
-        st.subheader(f"3 — Preview — {len(results)} SDS analysed")
+        _section_title(f"3 — Preview — {len(results)} SDS analysed")
         st.caption(
             "The summary table is displayed below. Download the complete Excel report "
             "for the full analysis and regulatory database screening results."
         )
-
-        def _build_results_table(results):
-            thead = (
-                '<table style="width:100%;border-collapse:collapse;'
-                'border:1px solid #DCE8FF;font-family:Segoe UI Light,Arial,sans-serif;">'
-                '<thead><tr style="background:#007AFF;color:#fff;text-align:left;">'
-                '<th style="padding:10px 8px;width:36px;">#</th>'
-                '<th style="padding:10px 8px;width:130px;">SDS ID</th>'
-                '<th style="padding:10px 8px;width:170px;">Product</th>'
-                '<th style="padding:10px 8px;width:130px;">Supplier</th>'
-                '<th style="padding:10px 8px;width:95px;">SDS Date</th>'
-                '<th style="padding:10px 8px;width:105px;">Alert Level</th>'
-                '<th style="padding:10px 8px;">Alert Justification</th>'
-                '</tr></thead><tbody>'
-            )
-            rows = []
-            for i, r in enumerate(results):
-                lvl = r["alert_level"]
-                bg, fg, emoji = ALERT_COLORS.get(lvl, ("#888", "#fff", "⚠️"))
-                badge = (
-                    '<span style="background:' + bg + ';color:' + fg + ';'
-                    'padding:3px 10px;border-radius:4px;font-size:0.82em;'
-                    'font-weight:600;white-space:nowrap;">' + emoji + ' ' + lvl + '</span>'
-                )
-                justif = r.get("alert_justification", "")
-                justif_html = justif.replace("\n", "<br>")
-                row_bg = (
-                    "#FFF8F8" if lvl == "CRITICAL" else
-                    "#FFE5E5" if lvl == "MAJOR" else
-                    "#FFF3E0" if lvl == "MINOR" else
-                    "#F5FFF8" if lvl == "NONE" else "#F5F5F5"
-                )
-                rows.append(
-                    '<tr style="background:' + row_bg + ';vertical-align:top;border-bottom:1px solid #EEF4FF;">'
-                    '<td style="padding:10px 8px;text-align:center;color:#666;font-size:0.85em;">' + str(i+1) + '</td>'
-                    '<td style="padding:10px 8px;font-size:0.82em;color:#444;word-break:break-all;">' + str(r.get("sds_id", "") or "—") + '</td>'
-                    '<td style="padding:10px 8px;font-weight:600;color:#222;">' + str(r.get("product", "") or "—") + '</td>'
-                    '<td style="padding:10px 8px;color:#444;">' + str(r.get("supplier", "") or "—") + '</td>'
-                    '<td style="padding:10px 8px;color:#444;white-space:nowrap;">' + str(r.get("sds_date", "") or "—") + '</td>'
-                    '<td style="padding:10px 8px;text-align:center;">' + badge + '</td>'
-                    '<td style="padding:10px 8px;font-size:0.85em;color:#333;line-height:1.6;">' + justif_html + '</td>'
-                    '</tr>'
-                )
-            return thead + "".join(rows) + "</tbody></table>"
 
         st.markdown(_build_results_table(results), unsafe_allow_html=True)
         for r in results:
@@ -1276,7 +1294,7 @@ if run:
         )
 
         st.divider()
-        st.subheader("Beta tester feedback")
+        _section_title("4 — Beta tester feedback")
         st.write("How would you rate your experience with the SDS Screener?")
         st.caption("Please do not include confidential client information or confidential SDS content in your comments.")
         with st.form("feedback_form", clear_on_submit=False):
@@ -1307,12 +1325,15 @@ if not run and st.session_state.get("last_results") and st.session_state.get("la
     excel_bytes = st.session_state["last_excel_bytes"]
     fname = st.session_state["last_excel_name"]
     st.divider()
-    st.subheader(f"3 — Preview — {len(results)} SDS analysed")
+    _section_title(f"3 — Preview — {len(results)} SDS analysed")
     st.caption(
         "The summary table is displayed below. Download the complete Excel report "
         "for the full analysis and regulatory database screening results."
     )
-    st.info("The completed analysis is available in the Excel report below.")
+    st.markdown(_build_results_table(results), unsafe_allow_html=True)
+    for r in results:
+        if r["alert_level"] == "ERROR":
+            st.warning("⚠️ **" + r["product"] + "** — " + r["alert_justification"])
     st.download_button(
         label=f"📥 Download {fname}",
         data=excel_bytes,
@@ -1323,7 +1344,7 @@ if not run and st.session_state.get("last_results") and st.session_state.get("la
         on_click="ignore",
         key="cached_download",
     )
-    st.subheader("Beta tester feedback")
+    _section_title("4 — Beta tester feedback")
     st.write("How would you rate your experience with the SDS Screener?")
     st.caption("Please do not include confidential client information or confidential SDS content in your comments.")
     with st.form("cached_feedback_form", clear_on_submit=False):
