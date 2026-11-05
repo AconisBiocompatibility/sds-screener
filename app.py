@@ -6,15 +6,11 @@ import anthropic
 import fitz
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
-from openpyxl.utils import column_index_from_string, get_column_letter
-from openpyxl.formatting.rule import FormulaRule, CellIsRule
+from openpyxl.utils import column_index_from_string
+from openpyxl.formatting.rule import FormulaRule
 from openpyxl.drawing.image import Image as XLImage
 import pandas as pd
-import json, io, datetime, re, os, traceback, base64, smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email.mime.text import MIMEText
-from email import encoders
+import json, io, datetime, re, os, traceback, base64
 
 # ─── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(page_title="SDS Biocompatibility Screener", page_icon="🔬",
@@ -429,14 +425,6 @@ def fit_row_height(ws, row, first_col, last_col, min_height=22, max_height=420):
     ws.row_dimensions[row].height = min(max_height, max(min_height, lines * 14.5))
 
 
-def last_populated_row(ws, first_row, last_col):
-    """Return the last row containing a value in the report table."""
-    for row in range(ws.max_row, first_row - 1, -1):
-        if any(ws.cell(row, col).value not in (None, "") for col in range(1, last_col + 1)):
-            return row
-    return first_row - 1
-
-
 def apply_table_font_and_alignment(wb):
     """Set table font size 10, titles size 11, top-left wrapped data."""
     from copy import copy
@@ -451,21 +439,8 @@ def apply_table_font_and_alignment(wb):
                     if ws.title in ("SDS Dashboard", "SDS Analysis") and cell.row >= (4 if ws.title == "SDS Dashboard" else 4):
                         f.sz = 10
                     cell.font = f
-        if ws.title == "SDS Analysis":
-            # Apply the table font to every cell, including blank cells and the
-            # previously inconsistent ranges E:V and AC:AE.
-            for r in range(3, ws.max_row + 1):
-                for c in range(1, 35):
-                    f = copy(ws.cell(r, c).font)
-                    f.name = "Segoe UI Light"
-                    f.sz = 10
-                    ws.cell(r, c).font = f
-            # Requested width: E through AA inclusive.
-            for c in range(5, 28):
-                ws.column_dimensions[get_column_letter(c)].width = 36
         if ws.title == "Project":
-            last_row = max(16, last_populated_row(ws, 17, 2))
-            for r in range(17, last_row + 1):
+            for r in range(17, 25):
                 for c in range(1, 3):
                     cell = ws.cell(r, c)
                     a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
@@ -474,8 +449,7 @@ def apply_table_font_and_alignment(wb):
                     f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
                 fit_row_height(ws, r, 1, 2)
         elif ws.title == "SDS Dashboard":
-            last_row = last_populated_row(ws, 4, 10)
-            for r in range(4, last_row + 1):
+            for r in range(4, ws.max_row + 1):
                 for c in range(1, 11):
                     cell = ws.cell(r, c)
                     a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
@@ -484,8 +458,7 @@ def apply_table_font_and_alignment(wb):
                     f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
                 fit_row_height(ws, r, 1, 10)
         elif ws.title == "SDS Analysis":
-            last_row = last_populated_row(ws, 5, 34)
-            for r in range(5, last_row + 1):
+            for r in range(5, ws.max_row + 1):
                 for c in range(1, 35):
                     cell = ws.cell(r, c)
                     a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
@@ -500,9 +473,6 @@ def apply_table_font_and_alignment(wb):
             ws.column_dimensions["AF"].width = max(ws.column_dimensions["AF"].width or 0, 15)
             ws.column_dimensions["AG"].width = max(ws.column_dimensions["AG"].width or 0, 24)
             ws.column_dimensions["AH"].width = max(ws.column_dimensions["AH"].width or 0, 14)
-            last_row = last_populated_row(ws, 5, 34)
-            for r in range(5, last_row + 1):
-                fit_row_height(ws, r, 1, 34)
         elif ws.title == "SDS Dashboard":
             ws.column_dimensions["E"].width = max(ws.column_dimensions["E"].width or 0, 15)
             ws.column_dimensions["H"].width = max(ws.column_dimensions["H"].width or 0, 15)
@@ -510,72 +480,14 @@ def apply_table_font_and_alignment(wb):
             ws.column_dimensions["J"].width = max(ws.column_dimensions["J"].width or 0, 14)
 
 
-def force_sds_analysis_font(ws, first_row=5, last_row=None):
-    """Final pass: force Segoe UI Light 10 on every A:AH table cell."""
-    from copy import copy
-    if last_row is None:
-        last_row = ws.max_row
-    for row in range(first_row, last_row + 1):
-        for col in range(1, 35):
-            cell = ws.cell(row, col)
-            f = copy(cell.font)
-            f.name = "Segoe UI Light"
-            f.sz = 10
-            cell.font = f
-            a = copy(cell.alignment)
-            a.horizontal = "left"
-            a.vertical = "top"
-            a.wrap_text = True
-            cell.alignment = a
-
-
-def set_alert_cell_style(cell, alert):
-    """Apply a visible alert style immediately, independent of Excel recalculation."""
-    colors = {
-        "CRITICAL": ("FF0000", "FFFFFF"),
-        "MAJOR": ("E53935", "FFFFFF"),
-        "MINOR": ("F57C00", "FFFFFF"),
-        "NONE": ("00B050", "FFFFFF"),
-        "NOT AN SDS": ("808080", "FFFFFF"),
-    }
-    fill_hex, font_hex = colors.get(str(alert), ("FFFFFF", "000000"))
-    cell.fill = PatternFill("solid", fgColor=fill_hex)
-    cell.font = Font(name="Segoe UI Light", size=10, bold=True, color=font_hex)
-    cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
-
-
-def force_dashboard_font(ws, first_row=4, last_row=None):
-    """Force Dashboard table formatting only on populated SDS rows."""
-    from copy import copy
-    if last_row is None:
-        last_row = ws.max_row
-    for row in range(first_row, last_row + 1):
-        for col in range(1, 11):
-            cell = ws.cell(row, col)
-            f = copy(cell.font)
-            f.name = "Segoe UI Light"
-            f.sz = 10
-            cell.font = f
-            a = copy(cell.alignment)
-            a.horizontal = "left"
-            a.vertical = "top"
-            a.wrap_text = True
-            cell.alignment = a
-            fit_row_height(ws, row, 1, 10)
-
-
 def apply_cf(ws):
     if hasattr(ws.conditional_formatting, "_cf_rules"):
         ws.conditional_formatting._cf_rules.clear()
-    for value, fill_hex in (("CRITICAL", "FF0000"), ("MAJOR", "E53935"),
-                            ("MINOR", "F57C00"), ("NONE", "00B050"),
-                            ("NOT AN SDS", "808080")):
-        ws.conditional_formatting.add(
-            "AB5:AB9999",
-            CellIsRule(operator="equal", formula=[f'"{value}"'],
-                       fill=PatternFill("solid", fgColor=fill_hex),
-                       font=Font(name="Segoe UI Light", size=10, bold=True, color="FFFFFF"))
-        )
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="CRITICAL"',   "FF0000", True,  False, "FFFFFF"))
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="MAJOR"',      "E53935", True,  False, "FFFFFF"))
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="MINOR"',      "F57C00", True,  False, "FFFFFF"))
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="NONE"',       "2E7D32", False, False, "FFFFFF"))
+    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="NOT AN SDS"', "808080", False, False, "FFFFFF"))
     ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="CRITICAL"', "FFE6E6"))
     ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="MAJOR"',    "FFE5E5"))
     ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="MINOR"',    "FFF3E0"))
@@ -609,10 +521,10 @@ def write_row(wb, data, row):
             c.number_format = DATE_FMT
 
     ab = ws.cell(row=row, column=cidx("AB"))
-    # Calculate the alert in Python so Excel does not depend on recalculation
-    # or localized French/English formula syntax when the file is opened.
-    ab.value = compute_alert_level(data)
-    set_alert_cell_style(ab, ab.value)
+    ab.value = (f'=IF(COUNTIF(F{row}:AA{row},"*🔴*")>0,"CRITICAL",'
+                f'IF(COUNTIF(F{row}:AA{row},"*🟠*")>0,"MAJOR",'
+                f'IF(COUNTIF(F{row}:AA{row},"*🟡*")>0,"MINOR","NONE")))')
+    # The template already contains the desired alert formatting.
 
     ws.cell(row=row, column=cidx("AD"), value="")
     ws.cell(row=row, column=cidx("AE"), value="")
@@ -638,8 +550,7 @@ def extend_dashboard(wb, analysis_row, dashboard_row):
         ("C", f"='SDS Analysis'!$B{analysis_row}"),
         ("D", f"='SDS Analysis'!$C{analysis_row}"),
         ("E", f"='SDS Analysis'!$D{analysis_row}"),
-        ("F", (wb["SDS Analysis"].cell(analysis_row, cidx("AE")).value
-                or wb["SDS Analysis"].cell(analysis_row, cidx("AB")).value)),
+        ("F", f"=IF('SDS Analysis'!$AE{analysis_row}<>\"\",'SDS Analysis'!$AE{analysis_row},'SDS Analysis'!$AB{analysis_row})"),
         ("G", f"='SDS Analysis'!$AC{analysis_row}&IF('SDS Analysis'!$AD{analysis_row}<>\"\",CHAR(10)&CHAR(10)&\"Toxicologist comment: \"&'SDS Analysis'!$AD{analysis_row},\"\")"),
         ("H", f"='SDS Analysis'!$AF{analysis_row}"),
         ("I", f"='SDS Analysis'!$AG{analysis_row}"),
@@ -648,8 +559,6 @@ def extend_dashboard(wb, analysis_row, dashboard_row):
     for col_l, val in formulas:
         c = ws.cell(row=dashboard_row, column=cidx(col_l), value=val)
         # Keep the user's Dashboard formatting and table style.
-        if col_l == "F":
-            set_alert_cell_style(c, val)
         if col_l in ("E", "H"):
             c.number_format = DATE_FMT
 
@@ -767,6 +676,90 @@ def _notion_register(first_name: str, last_name: str, company: str, email: str) 
         return True
 
 
+def _notion_submit_feedback(email: str, company: str, rating: int, comments: str):
+    """Create one feedback page without changing the existing user database."""
+    import requests as _req
+    from datetime import datetime, timezone
+
+    token = st.secrets.get("NOTION_TOKEN", "")
+    # Feedback uses the existing SDS Screener database. A separate feedback
+    # database ID is optional for backward compatibility, but not required.
+    db_id = st.secrets.get("NOTION_FEEDBACK_DB_ID", "") or st.secrets.get("NOTION_DB_ID", "")
+    if not token or not db_id:
+        return False, "Feedback is not configured yet. Please ask the administrator to set NOTION_TOKEN and NOTION_DB_ID."
+
+    headers = {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json",
+        "Notion-Version": "2022-06-28",
+    }
+    try:
+        schema_response = _req.get(
+            f"https://api.notion.com/v1/databases/{db_id}",
+            headers=headers, timeout=10,
+        )
+        if schema_response.status_code != 200:
+            return False, "The SDS Screener Notion database could not be accessed. Check NOTION_DB_ID and Notion permissions."
+        properties = schema_response.json().get("properties", {})
+
+        # The existing SDS Screener database already has Name as its title
+        # property. Feedback entries therefore use Name as the required title,
+        # while Feedback stores the feedback type/label.
+        required = ["Name", "Email", "Rating", "Submitted at"]
+        missing = [name for name in required if name not in properties]
+        if missing:
+            return False, "Missing Notion feedback properties: " + ", ".join(missing)
+
+        def rich_text(value):
+            return [{"type": "text", "text": {"content": str(value)[:2000]}}]
+
+        def property_value(name, value):
+            prop_type = properties[name].get("type")
+            if prop_type == "title":
+                return {"title": rich_text(value)}
+            if prop_type == "rich_text":
+                return {"rich_text": rich_text(value)}
+            if prop_type == "email":
+                return {"email": value or None}
+            if prop_type == "number":
+                return {"number": int(value) if value not in (None, "") else None}
+            if prop_type == "select":
+                return {"select": {"name": str(value)}}
+            if prop_type == "date":
+                return {"date": {"start": value}}
+            return None
+
+        now = datetime.now(timezone.utc).isoformat()
+        payload_properties = {}
+        values = {
+            "Name": f"SDS Screener feedback - {company or email} - {now[:10]}",
+            "Feedback": "Beta tester feedback",
+            "Email": email,
+            "Company": company,
+            "Rating": rating,
+            "Comments": comments.strip(),
+            "Submitted at": now,
+            "App version": "v2.0",
+        }
+        for name, value in values.items():
+            if name in properties:
+                encoded = property_value(name, value)
+                if encoded is not None:
+                    payload_properties[name] = encoded
+
+        response = _req.post(
+            "https://api.notion.com/v1/pages",
+            headers=headers,
+            json={"parent": {"database_id": db_id}, "properties": payload_properties},
+            timeout=10,
+        )
+        if response.status_code in (200, 201):
+            return True, "Thank you for your feedback."
+        return False, "Feedback could not be saved in Notion. Please try again later."
+    except Exception:
+        return False, "Feedback could not be saved in Notion. The analysis and Excel download remain available."
+
+
 def _show_registration_gate():
     st.markdown(
         "<h1 style='color:#007AFF;font-weight:700;margin:0;padding-top:4px;'>"
@@ -811,31 +804,6 @@ def _show_registration_gate():
                 st.session_state["reg_company"]    = company.strip()
                 st.session_state["reg_email"]      = email.strip()
                 st.rerun()
-
-
-def send_email_with_attachment(to_addr, subject, body_html,
-                                attachment_bytes=None, attachment_name=None):
-    smtp_user = st.secrets.get("SMTP_USER","")
-    smtp_pass = st.secrets.get("SMTP_PASSWORD","")
-    if not smtp_user or not smtp_pass:
-        st.warning("⚠️ Email not sent — SMTP credentials missing in Secrets.")
-        return False
-    try:
-        msg = MIMEMultipart("mixed")
-        msg["From"] = smtp_user; msg["To"] = to_addr; msg["Subject"] = subject
-        msg.attach(MIMEText(body_html, "html", "utf-8"))
-        if attachment_bytes and attachment_name:
-            part = MIMEBase("application","octet-stream")
-            part.set_payload(attachment_bytes)
-            encoders.encode_base64(part)
-            part.add_header("Content-Disposition", f'attachment; filename="{attachment_name}"')
-            msg.attach(part)
-        with smtplib.SMTP("smtp.office365.com", 587) as server:
-            server.starttls(); server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, to_addr, msg.as_string())
-        return True
-    except Exception as e:
-        st.error(f"❌ Email error: {e}"); return False
 
 
 # ─── CSS ──────────────────────────────────────────────────────────────────────
@@ -948,6 +916,15 @@ client_name  = st.session_state.get("reg_company", "")
 client_email = st.session_state.get("reg_email", "")
 config = {"client_name": client_name, "client_email": client_email}
 
+# Keep the last completed report available across Streamlit reruns, including
+# download and feedback submissions.
+if "last_results" not in st.session_state:
+    st.session_state["last_results"] = []
+if "last_excel_bytes" not in st.session_state:
+    st.session_state["last_excel_bytes"] = None
+if "last_excel_name" not in st.session_state:
+    st.session_state["last_excel_name"] = None
+
 # ── 1. SDS Upload ─────────────────────────────────────────────────────────────
 st.markdown(
     "<h2 style=\'color:#007AFF;font-weight:700;margin:24px 0 4px 0;\'>1 — SDS Upload</h2>",
@@ -974,6 +951,9 @@ if not can_run and pdf_uploads is not None:
         st.info(f"Missing: {', '.join(missing)}")
 
 # ── 5. Processing ─────────────────────────────────────────────────────────────
+results = []
+excel_bytes = None
+fname = None
 if run:
     # ── Beta limit check ─────────────────────────────────────────────────────
     is_admin     = client_email.strip().lower() == ADMIN_EMAIL.strip().lower()
@@ -1013,7 +993,6 @@ if run:
         apply_cf(wb["SDS Analysis"])
 
     client_api = anthropic.Anthropic(api_key=api_key)
-    results    = []
 
     for idx, pdf_file in enumerate(pdf_uploads):
         st.subheader(f"📄 {pdf_file.name}  ({idx+1}/{len(pdf_uploads)})")
@@ -1152,11 +1131,9 @@ if run:
         update_project_tab(wb, DB_FILE)
         enforce_report_formatting(wb)
         apply_table_font_and_alignment(wb)
-        # Format only the SDS data rows: row 5 for the first SDS, then one
-        # additional row for each additional SDS.
-        force_sds_analysis_font(wb["SDS Analysis"], 5, 4 + len(results))
-        force_dashboard_font(wb["SDS Dashboard"], 4, 3 + len(results))
         add_report_logos(wb)
+        if "Project" in wb.sheetnames:
+            wb.active = wb.sheetnames.index("Project")
         try:
             wb.calculation.fullCalcOnLoad = True
             wb.calculation.forceFullCalc = True
@@ -1167,16 +1144,21 @@ if run:
         excel_bytes = buf.getvalue()
         fname = (f"SDS_Analysis_{config.get('client_name','').replace(' ','_')}"
                  f"_{datetime.date.today().strftime('%Y%m%d')}.xlsx")
+        st.session_state["last_results"] = results
+        st.session_state["last_excel_bytes"] = excel_bytes
+        st.session_state["last_excel_name"] = fname
 
         st.divider()
         st.subheader(f"3 — Preview — {len(results)} SDS analysed")
-        st.caption("Summary view only. The full Excel report (with all extracted data and database results) is sent by email.")
+        st.caption(
+            "The summary table is displayed below. Download the complete Excel report "
+            "for the full analysis and regulatory database screening results."
+        )
 
-        # Build HTML table as a single string (avoids Streamlit f-string rendering issues)
         def _build_results_table(results):
             thead = (
                 '<table style="width:100%;border-collapse:collapse;'
-                'border:1px solid #DCE8FF;font-family:Segoe UI Light,Arial,sans-serif;">' 
+                'border:1px solid #DCE8FF;font-family:Segoe UI Light,Arial,sans-serif;">'
                 '<thead><tr style="background:#007AFF;color:#fff;text-align:left;">'
                 '<th style="padding:10px 8px;width:36px;">#</th>'
                 '<th style="padding:10px 8px;width:130px;">SDS ID</th>'
@@ -1190,33 +1172,27 @@ if run:
             rows = []
             for i, r in enumerate(results):
                 lvl = r["alert_level"]
-                bg, fg, emoji = ALERT_COLORS.get(lvl, ("#888","#fff","⚠️"))
+                bg, fg, emoji = ALERT_COLORS.get(lvl, ("#888", "#fff", "⚠️"))
                 badge = (
                     '<span style="background:' + bg + ';color:' + fg + ';'
                     'padding:3px 10px;border-radius:4px;font-size:0.82em;'
                     'font-weight:600;white-space:nowrap;">' + emoji + ' ' + lvl + '</span>'
                 )
                 justif = r.get("alert_justification", "")
-                if r.get("tox_comment"):
-                    justif += "\n\nToxicologist comment: " + r["tox_comment"]
                 justif_html = justif.replace("\n", "<br>")
                 row_bg = (
                     "#FFF8F8" if lvl == "CRITICAL" else
-                    "#FFE5E5" if lvl == "MAJOR"    else
-                    "#FFF3E0" if lvl == "MINOR"    else
-                    "#F5FFF8" if lvl == "NONE"     else "#F5F5F5"
+                    "#FFE5E5" if lvl == "MAJOR" else
+                    "#FFF3E0" if lvl == "MINOR" else
+                    "#F5FFF8" if lvl == "NONE" else "#F5F5F5"
                 )
-                sds_id   = str(r.get("sds_id","") or "—")
-                product  = str(r.get("product","") or "—")
-                supplier = str(r.get("supplier","") or "—")
-                sds_date = str(r.get("sds_date","") or "—")
                 rows.append(
                     '<tr style="background:' + row_bg + ';vertical-align:top;border-bottom:1px solid #EEF4FF;">'
                     '<td style="padding:10px 8px;text-align:center;color:#666;font-size:0.85em;">' + str(i+1) + '</td>'
-                    '<td style="padding:10px 8px;font-size:0.82em;color:#444;word-break:break-all;">' + sds_id + '</td>'
-                    '<td style="padding:10px 8px;font-weight:600;color:#222;">' + product + '</td>'
-                    '<td style="padding:10px 8px;color:#444;">' + supplier + '</td>'
-                    '<td style="padding:10px 8px;color:#444;white-space:nowrap;">' + sds_date + '</td>'
+                    '<td style="padding:10px 8px;font-size:0.82em;color:#444;word-break:break-all;">' + str(r.get("sds_id", "") or "—") + '</td>'
+                    '<td style="padding:10px 8px;font-weight:600;color:#222;">' + str(r.get("product", "") or "—") + '</td>'
+                    '<td style="padding:10px 8px;color:#444;">' + str(r.get("supplier", "") or "—") + '</td>'
+                    '<td style="padding:10px 8px;color:#444;white-space:nowrap;">' + str(r.get("sds_date", "") or "—") + '</td>'
                     '<td style="padding:10px 8px;text-align:center;">' + badge + '</td>'
                     '<td style="padding:10px 8px;font-size:0.85em;color:#333;line-height:1.6;">' + justif_html + '</td>'
                     '</tr>'
@@ -1224,94 +1200,90 @@ if run:
             return thead + "".join(rows) + "</tbody></table>"
 
         st.markdown(_build_results_table(results), unsafe_allow_html=True)
-
-        # Show errors separately
         for r in results:
             if r["alert_level"] == "ERROR":
                 st.warning("⚠️ **" + r["product"] + "** — " + r["alert_justification"])
 
-        st.divider()
-
-        # Emails
-        notify_email = st.secrets.get("NOTIFY_EMAIL","elodie.saudrais@aconis.fr")
-        summary_rows = "".join(
-            f'<tr><td>{i+1}</td><td>{r["sds_id"] or "—"}</td><td>{r["product"]}</td>'
-            f'<td>{r["supplier"] or "—"}</td><td>{r["sds_date"] or "—"}</td>'
-            f'<td><b>{r["alert_level"]}</b></td></tr>'
-            for i, r in enumerate(results)
-        )
-
-        # Email to client
-        if client_email:
-            client_html = f"""
-            <div style="font-family:Segoe UI Light,Arial,sans-serif;color:#222;">
-            <img src="data:image/png;base64,{LOGO_B64}" width="140"><br><br>
-            <h2 style="color:#007AFF;">Rapport de screening biocompatibilité · Biocompatibility Screening Report</h2>
-            <p>Bonjour / Dear {client_name or "Client"},</p>
-            <p>Veuillez trouver ci-joint votre rapport d'analyse de biocompatibilité généré par ACONIS.<br>
-            Please find attached your biocompatibility screening report generated by ACONIS.</p>
-            <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;">
-            <tr style="background:#007AFF;color:#fff;">
-              <th>#</th><th>SDS ID</th><th>Produit</th><th>Fournisseur</th><th>Date SDS</th><th>Niveau d'alerte</th>
-            </tr>
-            {summary_rows}
-            </table>
-            <br>
-            <p style="color:#555;font-size:0.88em;">
-            📊 Ce tableau est un résumé. Le fichier Excel joint contient le détail complet des données
-            extraites et des résultats de consultation des 8 bases de données réglementaires.<br>
-            This table is a summary. The attached Excel file contains the full details of extracted data
-            and results from all 8 regulatory databases.
-            </p>
-            <br>
-            <p style="color:#888;font-size:0.82em;">
-            <i>Résultats préliminaires générés par IA — nécessitent une validation par un toxicologue qualifié.<br>
-            Preliminary AI-assisted results — require validation by a qualified toxicologist.</i><br><br>
-            <b>ACONIS SAS</b> — 6, rue Bouchard 69510 Messimy, France<br>
-            RCS Lyon n° 944 426 113 — SIRET 944 426 113 00014<br>
-            elodie.saudrais@aconis.fr — +33 6 11 38 53 65
-            </p>
-            </div>"""
-            ok = send_email_with_attachment(
-                client_email,
-                f"Rapport biocompatibilité SDS — {client_name}",
-                client_html, excel_bytes, fname)
-            if ok:
-                st.success(f"📧 Rapport Excel envoyé à **{client_email}**")
-
-        # Notification to Élodie
-        aconis_html = f"""
-        <div style="font-family:Segoe UI Light,Arial,sans-serif;color:#222;">
-        <h2 style="color:#007AFF;">Nouveau screening complété</h2>
-        <p><b>Date :</b> {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
-        <p><b>Client :</b> {client_name}</p>
-        <p><b>Email client :</b> {client_email}</p>
-        <p><b>Fichiers analysés :</b> {len(results)}</p>
-        <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;">
-        <tr style="background:#007AFF;color:#fff;">
-          <th>#</th><th>SDS ID</th><th>Produit</th><th>Fournisseur</th><th>Date SDS</th><th>Alerte</th>
-        </tr>
-        {summary_rows}
-        </table>
-        </div>"""
-        ok2 = send_email_with_attachment(
-            notify_email,
-            f"[SDS Screener] {client_name} — {datetime.date.today()} — {len(results)} FDS",
-            aconis_html, excel_bytes, fname)
-        if ok2:
-            st.success(f"📧 Résumé envoyé à **{notify_email}**")
-
-        st.info("📊 The preview above is a **summary only**. "
-                "The **Excel file sent by email** contains the full detail of all extracted data "
-                "and results from all 8 regulatory databases.")
-
         st.download_button(
             label=f"📥 Download {fname}",
-            data=excel_bytes, file_name=fname,
+            data=excel_bytes,
+            file_name=fname,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary", use_container_width=True,
+            type="primary",
+            use_container_width=True,
             on_click="ignore",
         )
+
+        st.divider()
+        st.subheader("Beta tester feedback")
+        st.write("How would you rate your experience with the SDS Screener?")
+        st.caption("Please do not include confidential client information or confidential SDS content in your comments.")
+        with st.form("feedback_form", clear_on_submit=False):
+            rating = st.selectbox(
+                "Rating *",
+                options=[1, 2, 3, 4, 5],
+                index=None,
+                placeholder="Select a rating",
+                format_func=lambda value: "★" * value + "☆" * (5 - value),
+            )
+            comments = st.text_area("Comments or suggestions", max_chars=2000)
+            feedback_submitted = st.form_submit_button("Submit feedback", type="primary")
+            if feedback_submitted:
+                if rating is None:
+                    st.error("Please select a rating before submitting your feedback.")
+                else:
+                    ok, message = _notion_submit_feedback(
+                        client_email, client_name, int(rating), comments
+                    )
+                    if ok:
+                        st.success("Thank you for your feedback.")
+                    else:
+                        st.warning(message)
+
+# Re-render the completed report after download or feedback form reruns.
+if not run and st.session_state.get("last_results") and st.session_state.get("last_excel_bytes"):
+    results = st.session_state["last_results"]
+    excel_bytes = st.session_state["last_excel_bytes"]
+    fname = st.session_state["last_excel_name"]
+    st.divider()
+    st.subheader(f"3 — Preview — {len(results)} SDS analysed")
+    st.caption(
+        "The summary table is displayed below. Download the complete Excel report "
+        "for the full analysis and regulatory database screening results."
+    )
+    st.info("The completed analysis is available in the Excel report below.")
+    st.download_button(
+        label=f"📥 Download {fname}",
+        data=excel_bytes,
+        file_name=fname,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="primary",
+        use_container_width=True,
+        on_click="ignore",
+        key="cached_download",
+    )
+    st.subheader("Beta tester feedback")
+    st.write("How would you rate your experience with the SDS Screener?")
+    st.caption("Please do not include confidential client information or confidential SDS content in your comments.")
+    with st.form("cached_feedback_form", clear_on_submit=False):
+        cached_rating = st.selectbox(
+            "Rating *", [1, 2, 3, 4, 5], index=None,
+            placeholder="Select a rating",
+            format_func=lambda value: "★" * value + "☆" * (5 - value),
+        )
+        cached_comments = st.text_area("Comments or suggestions", max_chars=2000)
+        cached_submit = st.form_submit_button("Submit feedback", type="primary")
+        if cached_submit:
+            if cached_rating is None:
+                st.error("Please select a rating before submitting your feedback.")
+            else:
+                ok, message = _notion_submit_feedback(
+                    client_email, client_name, int(cached_rating), cached_comments
+                )
+                if ok:
+                    st.success("Thank you for your feedback.")
+                else:
+                    st.warning(message)
 
 # ─── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("""
