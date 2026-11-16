@@ -1347,20 +1347,20 @@ if not run and st.session_state.get("last_results") and st.session_state.get("la
     _section_title("4 — Beta tester feedback")
     st.write("How would you rate your experience with the SDS Screener?")
     st.caption("Please do not include confidential client information or confidential SDS content in your comments.")
-    with st.form("cached_feedback_form", clear_on_submit=False):
-        cached_rating = st.selectbox(
+    with st.form("feedback_form", clear_on_submit=False):
+        rating = st.selectbox(
             "Rating *", [1, 2, 3, 4, 5], index=None,
             placeholder="Select a rating",
             format_func=lambda value: "★" * value + "☆" * (5 - value),
         )
-        cached_comments = st.text_area("Comments or suggestions", max_chars=2000)
-        cached_submit = st.form_submit_button("Submit feedback", type="primary")
-        if cached_submit:
-            if cached_rating is None:
+        comments = st.text_area("Comments or suggestions", max_chars=2000)
+        feedback_submitted = st.form_submit_button("Submit feedback", type="primary")
+        if feedback_submitted:
+            if rating is None:
                 st.error("Please select a rating before submitting your feedback.")
             else:
                 ok, message = _notion_submit_feedback(
-                    client_email, client_name, int(cached_rating), cached_comments
+                    client_email, client_name, int(rating), comments
                 )
                 if ok:
                     st.success("Thank you for your feedback.")
