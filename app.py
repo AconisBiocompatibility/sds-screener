@@ -18,7 +18,6 @@ import datetime
 import re
 import os
 import traceback
-import requests
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -332,149 +331,6 @@ Use EXACTLY these keys. Values must match what you would write in the Excel cell
 """
 
 
-# ── Feedback helpers ──────────────────────────────────────────────────────────
-APP_VERSION = "v1.1-feedback"
-
-
-def _notion_property_value(prop_type: str, value):
-    """Build a Notion property value according to the database schema."""
-    if prop_type == "title":
-        return {"title": [{"type": "text", "text": {"content": str(value)[:2000]}}]}
-    if prop_type == "rich_text":
-        return {"rich_text": [{"type": "text", "text": {"content": str(value)[:2000]}}]}
-    if prop_type == "email":
-        return {"email": str(value).strip() or None}
-    if prop_type == "number":
-        return {"number": int(value)}
-    if prop_type == "date":
-        return {"date": {"start": str(value)}}
-    return None
-
-
-def submit_feedback_to_notion(rating: int, comments: str, email: str, company: str):
-    """Create one feedback page in the configured Notion database."""
-    token = st.secrets.get("NOTION_TOKEN", "")
-    db_id = st.secrets.get("NOTION_FEEDBACK_DB_ID", "") or st.secrets.get("NOTION_DB_ID", "")
-
-    if not token or not db_id:
-        return False, (
-            "Feedback non configuré : ajoutez NOTION_TOKEN et "
-            "NOTION_FEEDBACK_DB_ID dans les secrets Streamlit."
-        )
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28",
-    }
-
-    try:
-        schema_response = requests.get(
-            f"https://api.notion.com/v1/databases/{db_id}",
-            headers=headers,
-            timeout=10,
-        )
-        if schema_response.status_code != 200:
-            return False, (
-                "La base Notion de feedback est inaccessible. Vérifiez son identifiant "
-                "et partagez-la avec l'intégration Notion."
-            )
-
-        properties = schema_response.json().get("properties", {})
-        title_name = next(
-            (name for name, prop in properties.items() if prop.get("type") == "title"),
-            None,
-        )
-        if not title_name:
-            return False, "La base Notion doit contenir une propriété de type Title."
-
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        values = {
-            title_name: f"SDS Screener feedback - {datetime.date.today().isoformat()}",
-            "Feedback": "Beta tester feedback",
-            "Rating": int(rating),
-            "Comments": comments.strip(),
-            "Email": email.strip(),
-            "Company": company.strip(),
-            "Submitted at": now,
-            "App version": APP_VERSION,
-        }
-
-        encoded = {}
-        for name, value in values.items():
-            if name not in properties:
-                continue
-            prop_type = properties[name].get("type")
-            if prop_type == "title" and name != title_name:
-                continue
-            prop_value = _notion_property_value(prop_type, value)
-            if prop_value is not None:
-                encoded[name] = prop_value
-
-        response = requests.post(
-            "https://api.notion.com/v1/pages",
-            headers=headers,
-            json={"parent": {"database_id": db_id}, "properties": encoded},
-            timeout=10,
-        )
-        if response.status_code in (200, 201):
-            return True, "Merci pour votre feedback."
-
-        return False, "Le feedback n'a pas pu être enregistré dans Notion."
-    except Exception:
-        return False, (
-            "Impossible de contacter Notion. L'analyse et le téléchargement Excel "
-            "restent disponibles."
-        )
-
-
-def render_feedback_form(company: str):
-    """Render the feedback form exactly once per Streamlit rerun."""
-    st.divider()
-    st.subheader("📝 Feedback bêta-testeur")
-    st.write("Comment évaluez-vous votre expérience avec le SDS Screener ?")
-    st.caption(
-        "Merci de ne pas inclure d'informations confidentielles sur un client "
-        "ou sur le contenu d'une FDS."
-    )
-
-    with st.form("feedback_form", clear_on_submit=False):
-        rating = st.selectbox(
-            "Note *",
-            options=[1, 2, 3, 4, 5],
-            index=None,
-            placeholder="Sélectionnez une note",
-            format_func=lambda value: "★" * value + "☆" * (5 - value),
-        )
-        feedback_email = st.text_input(
-            "Votre email (facultatif)",
-            key="feedback_email",
-            help="Permet d'identifier le bêta-testeur. Il n'est pas nécessaire pour envoyer le feedback.",
-        )
-        comments = st.text_area(
-            "Commentaires ou suggestions (facultatif)",
-            max_chars=2000,
-            key="feedback_comments",
-        )
-        submitted = st.form_submit_button("Envoyer le feedback", type="primary")
-
-        if submitted:
-            if rating is None:
-                st.error("Veuillez sélectionner une note avant d'envoyer le feedback.")
-            else:
-                ok, message = submit_feedback_to_notion(
-                    int(rating), comments, feedback_email, company
-                )
-                if ok:
-                    st.session_state["feedback_sent"] = True
-                    st.success(message)
-                else:
-                    st.warning(message)
-
-    if st.session_state.get("feedback_sent"):
-        st.success("Feedback déjà envoyé pour cette session.")
-
-
 # ── MAIN APP ──────────────────────────────────────────────────────────────────
 
 st.markdown('<p class="block-title">🔬 SDS Biocompatibility Screener</p>', unsafe_allow_html=True)
@@ -576,14 +432,6 @@ with right:
 ⏱ ~1 min par FDS  
 🔒 Données non stockées
 """)
-
-# ── Persistent report state ───────────────────────────────────────────────────
-if "last_results" not in st.session_state:
-    st.session_state["last_results"] = []
-if "last_excel_bytes" not in st.session_state:
-    st.session_state["last_excel_bytes"] = None
-if "last_excel_filename" not in st.session_state:
-    st.session_state["last_excel_filename"] = None
 
 # ── Run button ────────────────────────────────────────────────────────────────
 can_run = bool(api_key and excel_upload and pdf_uploads)
@@ -730,57 +578,23 @@ Please complete the full analysis and output the JSON block at the end.
             with st.expander("Détail technique"):
                 st.code(traceback.format_exc())
 
-    # ── Save and display report ────────────────────────────────────────────────
+    # ── Download ──────────────────────────────────────────────────────────────
     if results:
-        buf = io.BytesIO()
-        wb.save(buf)
-        report_bytes = buf.getvalue()
-        filename = f"SIGVARIS_FDS_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
-
-        # Keep the report available after the feedback form triggers a rerun.
-        st.session_state["last_results"] = results
-        st.session_state["last_excel_bytes"] = report_bytes
-        st.session_state["last_excel_filename"] = filename
-
         st.divider()
         st.subheader(f"🎉 {len(results)} FDS analysée(s) avec succès")
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        filename = f"SIGVARIS_FDS_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
         st.download_button(
             label=f"📥 Télécharger {filename}",
-            data=report_bytes,
+            data=buf.getvalue(),
             file_name=filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary",
             use_container_width=True,
-            on_click="ignore",
         )
-        st.table([
-            {"FDS": r["file"], "Produit": r["product"], "Ligne Excel": r["row"]}
-            for r in results
-        ])
-        render_feedback_form(client_name)
 
-
-# Re-render the completed report after a download or feedback submission rerun.
-# The form keeps the same key, so the first click is not lost.
-if not run and st.session_state.get("last_results") and st.session_state.get("last_excel_bytes"):
-    cached_results = st.session_state["last_results"]
-    cached_bytes = st.session_state["last_excel_bytes"]
-    cached_filename = st.session_state["last_excel_filename"]
-
-    st.divider()
-    st.subheader(f"🎉 {len(cached_results)} FDS analysée(s) avec succès")
-    st.download_button(
-        label=f"📥 Télécharger {cached_filename}",
-        data=cached_bytes,
-        file_name=cached_filename,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        type="primary",
-        use_container_width=True,
-        on_click="ignore",
-        key="cached_excel_download",
-    )
-    st.table([
-        {"FDS": r["file"], "Produit": r["product"], "Ligne Excel": r["row"]}
-        for r in cached_results
-    ])
-    render_feedback_form(client_name)
+        st.table([{"FDS": r["file"], "Produit": r["product"], "Ligne Excel": r["row"]} for r in results])
