@@ -1,1378 +1,786 @@
 #!/usr/bin/env python3
-"""SDS Biocompatibility Screening Tool — ACONIS | ISO 10993-1:2025"""
+"""
+SDS Biocompatibility Screening Tool
+SIGVARIS GROUP — Powered by Claude AI
+MDR 2017/745 / ISO 10993-1:2025
+"""
 
 import streamlit as st
 import anthropic
-import fitz
+import fitz  # PyMuPDF
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
-from openpyxl.utils import column_index_from_string, get_column_letter
-from openpyxl.formatting.rule import FormulaRule
-from openpyxl.drawing.image import Image as XLImage
+from openpyxl.styles import PatternFill, Alignment
+from openpyxl.utils import column_index_from_string
 import pandas as pd
-import json, io, datetime, re, os, traceback, base64
+import json
+import io
+import datetime
+import re
+import os
+import traceback
+import requests
 
-# ─── Page config ──────────────────────────────────────────────────────────────
-st.set_page_config(page_title="SDS Biocompatibility Screener", page_icon="🔬",
-                   layout="wide", initial_sidebar_state="expanded")
+# ── Page config ──────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="SDS Biocompatibility Screener",
+    page_icon="🔬",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# ─── File paths ───────────────────────────────────────────────────────────────
-DIR         = os.path.dirname(__file__)
-DB_FILE     = os.path.join(DIR, "databases.xlsx")
-TMPL_FILE   = os.path.join(DIR, "template.xlsx")
-PROMPT_FILE = os.path.join(DIR, "agent_prompt_generic.txt")
+# ── Styling ───────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+[data-testid="stAppViewContainer"] { background: #f4f7fb; }
+.block-title { font-size: 1.6rem; font-weight: 700; color: #007AFF; margin-bottom: 0.2rem; }
+.block-sub  { font-size: 0.95rem; color: #555; margin-bottom: 1.5rem; }
+</style>
+""", unsafe_allow_html=True)
 
-LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAAMgAAAA8CAYAAAAjW/WRAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAEwGlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSfvu78nIGlkPSdXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQnPz4KPHg6eG1wbWV0YSB4bWxuczp4PSdhZG9iZTpuczptZXRhLyc+CjxyZGY6UkRGIHhtbG5zOnJkZj0naHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyc+CgogPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9JycKICB4bWxuczpBdHRyaWI9J2h0dHA6Ly9ucy5hdHRyaWJ1dGlvbi5jb20vYWRzLzEuMC8nPgogIDxBdHRyaWI6QWRzPgogICA8cmRmOlNlcT4KICAgIDxyZGY6bGkgcmRmOnBhcnNlVHlwZT0nUmVzb3VyY2UnPgogICAgIDxBdHRyaWI6Q3JlYXRlZD4yMDI1LTA2LTI2PC9BdHRyaWI6Q3JlYXRlZD4KICAgICA8QXR0cmliOkV4dElkPjgzZGQ2N2U4LTc4MzAtNGFhYi1iNWE0LTliYjhlOTIxZjdkMDwvQXR0cmliOkV4dElkPgogICAgIDxBdHRyaWI6RmJJZD41MjUyNjU5MTQxNzk1ODA8L0F0dHJpYjpGYklkPgogICAgIDxBdHRyaWI6VG91Y2hUeXBlPjI8L0F0dHJpYjpUb3VjaFR5cGU+CiAgICA8L3JkZjpsaT4KICAgPC9yZGY6U2VxPgogIDwvQXR0cmliOkFkcz4KIDwvcmRmOkRlc2NyaXB0aW9uPgoKIDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PScnCiAgeG1sbnM6ZGM9J2h0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvJz4KICA8ZGM6dGl0bGU+CiAgIDxyZGY6QWx0PgogICAgPHJkZjpsaSB4bWw6bGFuZz0neC1kZWZhdWx0Jz5EZXNpZ24gc2FucyB0aXRyZSAtIDE8L3JkZjpsaT4KICAgPC9yZGY6QWx0PgogIDwvZGM6dGl0bGU+CiA8L3JkZjpEZXNjcmlwdGlvbj4KCiA8cmRmOkRlc2NyaXB0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"
-
-# ─── Styles ───────────────────────────────────────────────────────────────────
+# ── Excel constants ───────────────────────────────────────────────────────────
 DATA_FILL = PatternFill("solid", fgColor="C5E1FF")
-WRAP_TOP  = Alignment(wrap_text=True, vertical="top")
-DATE_FMT  = '[$-409]mmm dd\\, yyyy;@'
 
-def seg(bold=False, italic=False, color="000000", size=10):
-    return Font(name="Segoe UI Light", size=size, bold=bold, italic=italic, color=color)
-
-def fr(formula, fill_hex=None, bold=False, italic=False, font_color="000000"):
-    fill = PatternFill("solid", fgColor=fill_hex) if fill_hex else None
-    font = Font(name="Segoe UI Light", size=10, bold=bold, italic=italic, color=font_color)
-    return FormulaRule(formula=[formula], fill=fill, font=font)
-
-def cidx(col): return column_index_from_string(col)
-
+# Ordered column map: (Excel letter, JSON key)
+# AC is the ALERT LEVEL formula — written separately
+# AF is always empty (toxicologist) — written separately
 COLS = [
-    ("A","sds_id"), ("B","product_name"), ("C","supplier"), ("D","sds_date"),
-    ("E","composition"),
-    ("F","cytotoxicity"), ("G","sensitisation"), ("H","skin_irritation"),
-    ("I","eye_irritation"), ("J","acute_systemic_toxicity"),
-    ("K","subacute_subchronic"), ("L","chronic_toxicity"),
-    ("M","genotoxicity"), ("N","carcinogenicity"), ("O","reproductive_toxicity"),
-    ("P","endocrine_disruption"), ("Q","bioaccumulation"),
-    ("R","haemocompatibility"), ("S","pyrogenicity"), ("T","implantation"),
-    ("U","immune_responses"), ("V","other_biological_effects"),
-    ("W","cmr_regulatory_status"), ("X","azo_dyes"),
-    ("Y","formaldehyde"), ("Z","heavy_metals"), ("AA","reach_svhc"),
-    ("AC","alert_justification"),
+    ("A",  "sds_id"),
+    ("B",  "product_name"),
+    ("C",  "supplier"),
+    ("D",  "product_type"),
+    ("E",  "sds_date"),
+    ("F",  "composition"),
+    ("G",  "cytotoxicity"),
+    ("H",  "sensitisation"),
+    ("I",  "skin_irritation"),
+    ("J",  "eye_irritation"),
+    ("K",  "acute_systemic_toxicity"),
+    ("L",  "subacute_subchronic"),
+    ("M",  "chronic_toxicity"),
+    ("N",  "genotoxicity"),
+    ("O",  "carcinogenicity"),
+    ("P",  "reproductive_toxicity"),
+    ("Q",  "endocrine_disruption"),
+    ("R",  "bioaccumulation"),
+    ("S",  "haemocompatibility"),
+    ("T",  "pyrogenicity"),
+    ("U",  "implantation"),
+    ("V",  "immune_responses"),
+    ("W",  "other_biological_effects"),
+    ("X",  "cmr_regulatory_status"),
+    ("Y",  "azo_dyes"),
+    ("Z",  "formaldehyde"),
+    ("AA", "heavy_metals"),
+    ("AB", "reach_svhc"),
+    # AC = formula
+    ("AD", "alert_justification"),
+    ("AE", "residual_on_fiber"),
+    # AF = empty (toxicologist)
+    # AG = corrected alert level — left blank for human reviewer
 ]
 
-ANALYSIS_FIELDS = [
-    "cytotoxicity","sensitisation","skin_irritation","eye_irritation",
-    "acute_systemic_toxicity","subacute_subchronic","chronic_toxicity",
-    "genotoxicity","carcinogenicity","reproductive_toxicity",
-    "endocrine_disruption","bioaccumulation","haemocompatibility",
-    "pyrogenicity","implantation","immune_responses",
-    "other_biological_effects","cmr_regulatory_status","azo_dyes",
-    "formaldehyde","heavy_metals","reach_svhc",
-]
-
-ALERT_COLORS = {
-    "CRITICAL":   ("#CC0000", "#FFFFFF", "🔴"),
-    "MAJOR":      ("#E53935", "#FFFFFF", "🔴"),
-    "MINOR":      ("#F57C00", "#FFFFFF", "🟠"),
-    "NONE":       ("#2E7D32", "#FFFFFF", "🟢"),
-    "NOT AN SDS": ("#808080", "#FFFFFF", "⬜"),
-    "ERROR":      ("#888888", "#FFFFFF", "⚠️"),
-}
-
-DB_DISPLAY_NAMES = [
-    ("CLP Annex VI ATP22",          "CLP Annex VI ATP22"),
-    ("SVHC Candidates",             "SVHC Candidates (ECHA)"),
-    ("REACH Annex XVII",            "REACH Annex XVII"),
-    ("Aromatic Amines (Ent.43)",    "Aromatic Amines (Entry 43)"),
-    ("Azo - Restricted Amines (JTF)", "Azo Restricted Amines (JTF)"),
-    ("IARC",                        "IARC Monographs"),
-    ("ED Assessment (ECHA)",        "ED Assessment (ECHA)"),
-    ("TEDX",                        "TEDX"),
-]
-
-# ─── SDS format detection ─────────────────────────────────────────────────────
-def detect_sds_format(text: str) -> str:
-    """Detect SDS format — works for EN/FR/DE/ES/IT documents."""
-    high_sections = 0
-    for i in range(9, 17):
-        patterns = [
-            rf'section\s+{i}\b',       # EN
-            rf'rubrique\s+{i}\b',      # FR
-            rf'abschnitt\s+{i}\b',     # DE
-            rf'secci[o\u00f3]n\s+{i}\b', # ES
-            rf'sezione\s+{i}\b',       # IT
-            rf'^\s*{i}[\s\.\:\-\)]', # Generic numbered
-        ]
-        if any(re.search(p, text, re.IGNORECASE | re.MULTILINE) for p in patterns):
-            high_sections += 1
-    return "16-section" if high_sections >= 4 else "8-section"
-
-def normalize_db_version(raw: str) -> str:
-    """Normalize database version/date to a clean display string."""
-    import re as _re, datetime as _dt
-    if not raw or str(raw).strip() in ("", "—", "None"):
-        return "—"
-    s = str(raw).strip()
-    # Strip common verbose prefixes
-    for prefix in [
-        "Last table update:", "Last table update :",
-        "Last updated", "Last update:", "Last update :",
-        "Database contains",
-    ]:
-        if s.lower().startswith(prefix.lower()):
-            s = s[len(prefix):].strip(" :,")
-    # Take only first meaningful sentence
-    s = _re.split(r'[.\n]', s)[0].strip()
-    # Remove trailing time like "10:08 (CET)"
-    s = _re.sub(r'\s+\d{1,2}:\d{2}.*$', '', s).strip()
-
-    months = {"january":1,"february":2,"march":3,"april":4,"may":5,"june":6,
-              "july":7,"august":8,"september":9,"october":10,"november":11,"december":12}
-
-    # YYYY-MM-DD
-    m = _re.match(r'(\d{4})-(\d{2})-(\d{2})', s)
-    if m:
-        try:
-            d = _dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            return d.strftime("%B %d, %Y")
-        except Exception:
-            pass
-
-    # DD Month YYYY  e.g. "10 December 2025"
-    m = _re.match(r'(\d{1,2})\s+(\w+)\s+(\d{4})', s, _re.IGNORECASE)
-    if m and m.group(2).lower() in months:
-        try:
-            d = _dt.date(int(m.group(3)), months[m.group(2).lower()], int(m.group(1)))
-            return d.strftime("%B %d, %Y")
-        except Exception:
-            pass
-
-    # Month DD, YYYY  e.g. "October 1, 2015"
-    m = _re.match(r'(\w+)\s+(\d{1,2}),?\s+(\d{4})', s, _re.IGNORECASE)
-    if m and m.group(1).lower() in months:
-        try:
-            d = _dt.date(int(m.group(3)), months[m.group(1).lower()], int(m.group(2)))
-            return d.strftime("%B %d, %Y")
-        except Exception:
-            pass
-
-    # Month YYYY  e.g. "September 2018"
-    m = _re.match(r'(\w+)\s+(\d{4})$', s, _re.IGNORECASE)
-    if m and m.group(1).lower() in months:
-        return f"{m.group(1).capitalize()} {m.group(2)}"
-
-    # Looks like a version code (e.g. "ATP 22") — no digits that look like a year
-    if not _re.search(r'\b(19|20)\d{2}\b', s):
-        return f"Version: {s}"
-
-    return s
-
-
-MSDS_8_MODIFIER = """
-
-## IMPORTANT — OLD FORMAT MSDS DETECTED (pre-GHS / pre-2015)
-
-This document appears to be an old-format MSDS (pre-GHS harmonisation, typically 8–16 sections
-with non-standardised structure). Apply the following rules:
-
-- Section mapping: hazard info may appear in "Section II/III", "Health Hazards", "Chemical Hazards"
-  instead of current Sections 2 and 11.
-- CLP H-phrases may be absent; old R-phrases may be used — map R-phrases to H-phrases where possible.
-- Composition may be in "Section II" or "Ingredients" — extract all CAS numbers found.
-- When a specific field CANNOT be found due to the old format, write EXACTLY:
-  "Not available in MSDS format — [field name] section absent or non-standardised"
-- Do NOT invent, extrapolate, or assume data not explicitly present in the document.
-- Still output the complete JSON block with all required keys — use the above phrase for unavailable fields.
-
-"""
-
-# ─── Database helpers ─────────────────────────────────────────────────────────
+# ── Helper: load all lookup databases ────────────────────────────────────────
 @st.cache_data(show_spinner=False)
-def get_db_dates(db_path: str) -> dict:
-    """Read version/date from each database sheet (cell A4, fallback first 3 rows)."""
-    if not os.path.exists(db_path):
-        return {}
-    dates = {}
-    try:
-        wb = load_workbook(db_path, read_only=True, data_only=True)
-        for sheet_name, _ in DB_DISPLAY_NAMES:
-            if sheet_name not in wb.sheetnames:
-                continue
-            ws = wb[sheet_name]
-            val = None
-            try:
-                val = ws["A4"].value
-            except Exception:
-                pass
-            if not val or str(val).strip() in ("", "None"):
-                for row in ws.iter_rows(max_row=3, values_only=True):
-                    for cell in row:
-                        if cell and str(cell).strip() not in ("", "None"):
-                            val = str(cell).strip()
-                            break
-                    if val:
-                        break
-            dates[sheet_name] = str(val).strip() if val else "—"
-        wb.close()
-    except Exception:
-        pass
-    return dates
-
-
-@st.cache_data(show_spinner=False)
-def load_databases(db_bytes: bytes) -> dict:
-    wb = load_workbook(io.BytesIO(db_bytes), read_only=True, data_only=True)
+def load_databases(excel_bytes: bytes) -> dict:
+    """Load lookup databases from the Excel workbook."""
+    wb = load_workbook(io.BytesIO(excel_bytes), read_only=True, data_only=True)
     dbs = {}
 
-    def find_header_row(ws, keyword, max_rows=10):
-        for i, row in enumerate(ws.iter_rows(max_row=max_rows, values_only=True), 1):
-            if any(keyword.lower() in str(c).lower() for c in row if c):
-                return i
-        return 1
-
-    def sheet_to_df(name, cas_hint="CAS"):
-        if name not in wb.sheetnames:
+    def rows_to_df(sheet_name: str, header_row: int) -> pd.DataFrame:
+        ws = wb[sheet_name]
+        rows = list(ws.iter_rows(values_only=True))
+        if len(rows) < header_row:
             return pd.DataFrame()
-        ws = wb[name]
-        h = find_header_row(ws, cas_hint)
-        rows = list(ws.iter_rows(min_row=h, values_only=True))
-        if not rows:
-            return pd.DataFrame()
-        hdrs = [str(c).strip() if c else f"_c{i}" for i, c in enumerate(rows[0])]
-        return pd.DataFrame(rows[1:], columns=hdrs)
+        hdrs = [str(h).strip() if h else f"_col{i}" for i, h in enumerate(rows[header_row - 1])]
+        return pd.DataFrame(rows[header_row:], columns=hdrs)
 
-    def register(key, sheet_name, cas_hint="CAS"):
-        try:
-            df = sheet_to_df(sheet_name, cas_hint)
-            cas_col = next((c for c in df.columns if "cas" in c.lower()), None)
-            if cas_col is not None:
-                df[cas_col] = df[cas_col].astype(str).str.strip()
-                dbs[key]            = df
-                dbs[f"{key}_cas"]   = cas_col
-                dbs[f"{key}_sheet"] = sheet_name
-        except Exception:
-            pass
+    # SVHC Candidates — header row 6
+    try:
+        df = rows_to_df("SVHC Candidates", 6)
+        df["CAS No."] = df["CAS No."].astype(str).str.strip()
+        dbs["svhc"] = df
+    except Exception:
+        pass
 
-    register("clp",     "CLP Annex VI ATP22")
-    register("svhc",    "SVHC Candidates")
-    register("reach",   "REACH Annex XVII")
-    register("amines",  "Aromatic Amines (Ent.43)")
-    register("azo_jtf", "Azo - Restricted Amines (JTF)")
-    register("iarc",    "IARC")
-    register("ed",      "ED Assessment (ECHA)")
-    register("tedx",    "TEDX")
+    # CLP Annex VI ATP22 — header row 6
+    try:
+        df = rows_to_df("CLP Annex VI ATP22", 6)
+        df["CAS No"] = df["CAS No"].astype(str).str.strip()
+        dbs["clp"] = df
+    except Exception:
+        pass
+
+    # IARC — header row 6
+    try:
+        df = rows_to_df("IARC", 6)
+        df["CAS No."] = df["CAS No."].astype(str).str.strip()
+        dbs["iarc"] = df
+    except Exception:
+        pass
+
+    # Aromatic Amines (Ent.43) — find header dynamically
+    try:
+        ws = wb["Aromatic Amines (Ent.43)"]
+        rows = list(ws.iter_rows(values_only=True))
+        for i, row in enumerate(rows):
+            if row[0] and "name" in str(row[0]).lower():
+                hdrs = [str(h).strip() if h else f"_col{j}" for j, h in enumerate(row)]
+                dbs["aromatic_amines"] = pd.DataFrame(rows[i + 1:], columns=hdrs)
+                break
+    except Exception:
+        pass
+
+    # Agent rules (specific) — residual lookup table (rows ~64–120)
+    try:
+        ws = wb["Agent rules (specific)"]
+        rows = list(ws.iter_rows(values_only=True))
+        residual = {}
+        for row in rows[62:]:  # starts around row 63 in the sheet
+            if row[0] and row[3] is not None:
+                key = str(row[0]).strip().lstrip("@ ").strip().lower()
+                val = row[3]
+                if val == 1:
+                    residual[key] = "Yes - Sigvaris confirmed"
+                elif val == 0:
+                    residual[key] = "No - Sigvaris confirmed"
+        dbs["residual"] = residual
+    except Exception:
+        pass
+
     wb.close()
     return dbs
 
 
-def lookup_all_cas(cas_list, dbs):
+def lookup_residual(product_name: str, residual_db: dict) -> str:
+    key = product_name.strip().lower()
+    return residual_db.get(key, "To provide - Sigvaris classification required")
+
+
+def lookup_cas_in_databases(cas_list: list, dbs: dict) -> str:
+    """Search CAS numbers in databases and return a compact text report."""
     if not cas_list:
-        return "No CAS numbers extracted from the SDS text."
-    today = datetime.date.today().strftime("%b %Y")
-    lines = [f"PRE-COMPUTED DATABASE LOOKUP — {len(cas_list)} CAS extracted", "="*60]
+        return "No CAS numbers found in SDS text."
+
+    lines = [f"PRE-COMPUTED DATABASE LOOKUP — {len(cas_list)} CAS number(s) extracted from SDS:", "=" * 60]
+
     for cas in cas_list:
-        hits = []
-        if "clp" in dbs:
-            cc = dbs["clp_cas"]
-            m  = dbs["clp"][dbs["clp"][cc].str.contains(cas, regex=False, na=False)]
-            for _, r in m.iterrows():
-                codes = str(r.get("Hazard Statement Code(s)","")).replace("\n"," ")
-                cat   = str(r.get("Hazard Class and Category Code(s)",""))
-                name  = r.get("International Chemical Identification","")
-                hits.append(f"  [CLP Annex VI ATP22] {name} | {cat} | H-codes: {codes}")
+        found = False
+        entry = [f"\nCAS {cas}:"]
+
         if "svhc" in dbs:
-            cc = dbs["svhc_cas"]
-            m  = dbs["svhc"][dbs["svhc"][cc].str.contains(cas, regex=False, na=False)]
-            for _, r in m.iterrows():
-                reason = r.get("Reason for inclusion", r.get("reason",""))
-                name   = r.get("Substance name", r.get("name",""))
-                hits.append(f"  [SVHC Candidates] {name} — Reason: {reason}")
+            hits = dbs["svhc"][dbs["svhc"]["CAS No."].str.contains(cas, regex=False, na=False)]
+            for _, r in hits.iterrows():
+                found = True
+                entry.append(f"  [SVHC] {r.get('Substance name', '')} — Reason: {r.get('Reason for inclusion', '')}")
+
+        if "clp" in dbs:
+            hits = dbs["clp"][dbs["clp"]["CAS No"].str.contains(cas, regex=False, na=False)]
+            for _, r in hits.iterrows():
+                found = True
+                h_codes = str(r.get("Hazard Statement Code(s)", "")).replace("\n", " ").strip()
+                hazard  = str(r.get("Hazard Class and Category Code(s)", "")).replace("\n", " / ").strip()
+                entry.append(f"  [CLP ATP22] {r.get('International Chemical Identification', '')} | {hazard} | {h_codes}")
+
         if "iarc" in dbs:
-            cc = dbs["iarc_cas"]
-            m  = dbs["iarc"][dbs["iarc"][cc].str.contains(cas, regex=False, na=False)]
-            for _, r in m.iterrows():
-                grp   = r.get("Group", r.get("group",""))
-                agent = r.get("Agent", r.get("agent",""))
-                hits.append(f"  [IARC, {today}] Group {grp} — {agent}")
-        if "reach" in dbs:
-            cc = dbs["reach_cas"]
-            m  = dbs["reach"][dbs["reach"][cc].str.contains(cas, regex=False, na=False)]
-            for _, r in m.iterrows():
-                entry = r.get("Entry", r.get("entry",""))
-                restr = str(r.get("Restriction", r.get("restriction","")))[:120]
-                hits.append(f"  [REACH Annex XVII] Entry {entry} — {restr}")
-        if "amines" in dbs:
-            cc = dbs["amines_cas"]
-            m  = dbs["amines"][dbs["amines"][cc].str.contains(cas, regex=False, na=False)]
-            if not m.empty:
-                hits.append("  [Aromatic Amines Ent.43] MATCH — restricted aromatic amine")
-        if "azo_jtf" in dbs:
-            cc = dbs["azo_jtf_cas"]
-            m  = dbs["azo_jtf"][dbs["azo_jtf"][cc].str.contains(cas, regex=False, na=False)]
-            if not m.empty:
-                hits.append("  [Azo - Restricted Amines JTF] MATCH — restricted azo amine")
-        if "ed" in dbs:
-            cc = dbs["ed_cas"]
-            m  = dbs["ed"][dbs["ed"][cc].str.contains(cas, regex=False, na=False)]
-            for _, r in m.iterrows():
-                status = str(r.get("Status", r.get("status","")))
-                hits.append(f"  [ED Assessment (ECHA), {today}] {status}")
-        if "tedx" in dbs:
-            cc = dbs["tedx_cas"]
-            m  = dbs["tedx"][dbs["tedx"][cc].str.contains(cas, regex=False, na=False)]
-            if not m.empty:
-                hits.append("  [TEDX] Listed as endocrine disruptor")
-        if hits:
-            lines.append(f"\nCAS {cas}:")
-            lines.extend(hits)
-        else:
-            lines.append(f"\nCAS {cas}: Not found in CLP ATP22, SVHC, IARC, REACH Annex XVII, "
-                         "Aromatic Amines, ED Assessment, TEDX")
+            hits = dbs["iarc"][dbs["iarc"]["CAS No."].str.contains(cas, regex=False, na=False)]
+            for _, r in hits.iterrows():
+                found = True
+                entry.append(f"  [IARC] Group {r.get('Group', '')} — {r.get('Agent', '')}")
+
+        if not found:
+            entry.append("  Not found in SVHC, CLP ATP22, or IARC")
+
+        lines.extend(entry)
+
     return "\n".join(lines)
 
 
-# ─── Excel helpers ────────────────────────────────────────────────────────────
-def parse_date(s):
-    if not s or str(s).strip() in ("", "Not stated", "N/A", "not stated", "—"):
-        return str(s) if s else "Not stated"
-    if isinstance(s, (datetime.datetime, datetime.date)):
-        return datetime.datetime(s.year, s.month, s.day)
-    for fmt in ("%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y",
-                "%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%d %b %Y"):
+def extract_pdf_text(pdf_bytes: bytes) -> str:
+    """Extract text from all pages of a PDF."""
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    pages = []
+    for i, page in enumerate(doc):
+        pages.append(f"--- PAGE {i + 1} ---\n{page.get_text()}")
+    doc.close()
+    return "\n".join(pages)
+
+
+def extract_cas_numbers(text: str) -> list:
+    """Return unique CAS numbers found in text."""
+    return sorted(set(re.findall(r'\b\d{1,7}-\d{2}-\d\b', text)))
+
+
+def parse_json_block(text: str) -> dict:
+    """Extract the JSON block from Claude's response."""
+    m = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
+    if m:
         try:
-            return datetime.datetime.strptime(str(s).strip(), fmt)
-        except Exception:
+            return json.loads(m.group(1))
+        except json.JSONDecodeError:
             pass
-    return str(s)
+    # Fallback: try to find raw JSON object
+    m = re.search(r'\{[^{}]{50,}\}', text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            pass
+    return {}
 
 
-def compute_alert_level(data):
-    all_text = " ".join(str(data.get(f,"")) for f in ANALYSIS_FIELDS)
-    if "🔴" in all_text: return "CRITICAL"
-    if "🟠" in all_text: return "MAJOR"
-    if "🟡" in all_text: return "MINOR"
-    return "NONE"
-
-
-def copy_row_format(ws, source_row, target_row):
-    """Repeat the first data-row formatting on subsequent table rows."""
-    from copy import copy
-    ws.row_dimensions[target_row].height = ws.row_dimensions[source_row].height
-    for col in range(1, ws.max_column + 1):
-        src = ws.cell(source_row, col)
-        dst = ws.cell(target_row, col)
-        dst._style = copy(src._style)
-        dst.font = copy(src.font)
-        dst.fill = copy(src.fill)
-        dst.border = copy(src.border)
-        dst.alignment = copy(src.alignment)
-        dst.number_format = src.number_format
-        dst.protection = copy(src.protection)
-
-
-def enforce_report_formatting(wb):
-    """Apply Segoe UI Light and top-left wrapping to all report data tables."""
-    from copy import copy
-    from openpyxl.styles import Alignment
-    for ws in wb.worksheets:
-        for row in ws.iter_rows():
-            for cell in row:
-                if cell.value is not None or cell.has_style:
-                    f = copy(cell.font)
-                    f.name = "Segoe UI Light"
-                    cell.font = f
-        if ws.title == "Project":
-            ranges = ((17, 24, 1, 2),)
-        elif ws.title == "SDS Dashboard":
-            ranges = ((4, max(4, ws.max_row), 1, 10),)
-        elif ws.title == "SDS Analysis":
-            ranges = ((5, max(5, ws.max_row), 1, 34),)
-        else:
-            ranges = ()
-        for r1, r2, c1, c2 in ranges:
-            for r in range(r1, r2 + 1):
-                for c in range(c1, c2 + 1):
-                    cell = ws.cell(r, c)
-                    a = copy(cell.alignment)
-                    a.horizontal = "left"
-                    a.vertical = "top"
-                    a.wrap_text = True
-                    cell.alignment = a
-
-
-def add_report_logos(wb):
-    """Embed the ACONIS logo as a real Excel image on each report sheet."""
-    logo_bytes = base64.b64decode(LOGO_B64)
-    for sheet_name in ("Project", "SDS Dashboard", "SDS Analysis"):
-        ws = wb[sheet_name] if sheet_name in wb.sheetnames else None
-        if ws is None:
-            continue
-        ws["A1"].value = None
-        ws._images = []
-        img = XLImage(io.BytesIO(logo_bytes))
-        img.width = 125
-        img.height = 38
-        img.anchor = "A1"
-        ws.add_image(img)
-
-
-def fit_row_height(ws, row, first_col, last_col, min_height=22, max_height=420):
-    """Estimate a readable row height from wrapped cell contents."""
-    lines = 1
-    for col in range(first_col, last_col + 1):
-        value = ws.cell(row, col).value
-        if value in (None, ""):
-            continue
-        width = ws.column_dimensions[ws.cell(row, col).column_letter].width or 10
-        chars_per_line = max(12, int(width * 1.05))
-        text = str(value)
-        for paragraph in text.split("\n"):
-            lines = max(lines, max(1, len(paragraph) // chars_per_line + 1))
-    ws.row_dimensions[row].height = min(max_height, max(min_height, lines * 14.5))
-
-
-def apply_table_font_and_alignment(wb):
-    """Set table font size 10, titles size 11, top-left wrapped data."""
-    from copy import copy
-    thin = Side(style="thin", color="8FAADC")
-    table_border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    for ws in wb.worksheets:
-        for row in ws.iter_rows():
-            for cell in row:
-                if cell.value is not None or cell.has_style:
-                    f = copy(cell.font)
-                    f.name = "Segoe UI Light"
-                    if ws.title in ("SDS Dashboard", "SDS Analysis") and cell.row >= (4 if ws.title == "SDS Dashboard" else 4):
-                        f.sz = 10
-                    cell.font = f
-        if ws.title == "Project":
-            for r in range(17, 25):
-                for c in range(1, 3):
-                    cell = ws.cell(r, c)
-                    a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
-                    cell.alignment = a
-                    cell.border = table_border
-                    f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
-                fit_row_height(ws, r, 1, 2)
-        elif ws.title == "SDS Dashboard":
-            for r in range(4, ws.max_row + 1):
-                for c in range(1, 11):
-                    cell = ws.cell(r, c)
-                    a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
-                    cell.alignment = a
-                    cell.border = table_border
-                    f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
-                fit_row_height(ws, r, 1, 10)
-        elif ws.title == "SDS Analysis":
-            for r in range(5, ws.max_row + 1):
-                for c in range(1, 35):
-                    cell = ws.cell(r, c)
-                    a = copy(cell.alignment); a.horizontal = "left"; a.vertical = "top"; a.wrap_text = True
-                    cell.alignment = a
-                    cell.border = table_border
-                    f = copy(cell.font); f.name = "Segoe UI Light"; f.sz = 10; cell.font = f
-                fit_row_height(ws, r, 1, 34)
-        if ws.title in ("Project", "SDS Dashboard", "SDS Analysis"):
-            for coord in ("B1",):
-                f = copy(ws[coord].font); f.name = "Segoe UI Light"; f.sz = 11; ws[coord].font = f
-        if ws.title == "SDS Analysis":
-            # Restore the readable layout for the long SDS analysis fields.
-            # The template defaults many of these columns to width 13.
-            for col_idx in range(5, 28):  # E:AA
-                ws.column_dimensions[get_column_letter(col_idx)].width = 36
-
-            # AB contains CRITICAL / MAJOR / MINOR / NONE.
-            ws.column_dimensions["AB"].width = 18
-            ws.column_dimensions["AF"].width = max(ws.column_dimensions["AF"].width or 0, 15)
-            ws.column_dimensions["AG"].width = max(ws.column_dimensions["AG"].width or 0, 24)
-            ws.column_dimensions["AH"].width = max(ws.column_dimensions["AH"].width or 0, 14)
-        elif ws.title == "SDS Dashboard":
-            ws.column_dimensions["E"].width = max(ws.column_dimensions["E"].width or 0, 15)
-            ws.column_dimensions["H"].width = max(ws.column_dimensions["H"].width or 0, 15)
-            ws.column_dimensions["I"].width = max(ws.column_dimensions["I"].width or 0, 24)
-            ws.column_dimensions["J"].width = max(ws.column_dimensions["J"].width or 0, 14)
-
-
-def apply_cf(ws):
-    if hasattr(ws.conditional_formatting, "_cf_rules"):
-        ws.conditional_formatting._cf_rules.clear()
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="CRITICAL"',   "FF0000", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="MAJOR"',      "E53935", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="MINOR"',      "F57C00", True,  False, "FFFFFF"))
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="NONE"',       "2E7D32", False, False, "FFFFFF"))
-    ws.conditional_formatting.add("AB5:AB9999", fr('$AB5="NOT AN SDS"', "808080", False, False, "FFFFFF"))
-    ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="CRITICAL"', "FFE6E6"))
-    ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="MAJOR"',    "FFE5E5"))
-    ws.conditional_formatting.add("A5:AH9999",  fr('$AB5="MINOR"',    "FFF3E0"))
-    ws.conditional_formatting.add("AG5:AG9999", fr('$AG5="AI - SDS Screening agent only"', "FFF2CC", False, True))
-    ws.conditional_formatting.add("AG5:AG9999", fr('AND($AG5<>"",$AG5<>"AI - SDS Screening agent only")', "E2EFDA"))
-    ws.conditional_formatting.add("AD5:AD9999", fr('$AD5<>""', "E2EFDA", True))
-    ws.conditional_formatting.add("AH5:AH9999", fr('$AH5="Draft"',      "BDD7EE"))
-    ws.conditional_formatting.add("AH5:AH9999", fr('$AH5="Validated"',  "00B050", True, False, "FFFFFF"))
-    ws.conditional_formatting.add("AH5:AH9999", fr('$AH5="Superseded"', "D9D9D9", False, False, "808080"))
-    ws.conditional_formatting.add("AH5:AH9999", fr('$AH5="Archived"',   "595959", False, False, "FFFFFF"))
-    ws.conditional_formatting.add("D5:D9999", fr('AND(D5<>"",ISNUMBER(D5),D5<TODAY()-1095)', "FFE0E0", False, False, "CC0000"))
-    ws.conditional_formatting.add("E5:AB9999", FormulaRule(
-        formula=['NOT(ISERROR(SEARCH("TO VERIFY",E5)))'],
-        fill=PatternFill("solid", fgColor="E2CCFF"),
-        font=Font(name="Segoe UI Light", size=10),
-    ))
-
-
-def write_row(wb, data, row):
+def write_row_to_excel(wb, data: dict) -> int:
+    """Append a new analysis row to SDS Analysis tab. Returns the row number written."""
     ws = wb["SDS Analysis"]
-    if row > 5:
-        copy_row_format(ws, 5, row)
-    for col_letter, key in COLS:
-        val = data.get(key,"")
-        if key == "sds_date":
-            val = parse_date(str(val)) if val else "Not stated"
-        c = ws.cell(row=row, column=cidx(col_letter), value=val)
-        # Keep the user's template font, fill, borders and alignment.
-        # Only enforce the Excel date format for the SDS date column.
-        if key == "sds_date":
-            c.number_format = DATE_FMT
 
-    ab = ws.cell(row=row, column=cidx("AB"))
-    # Write the calculated value directly, rather than relying on Excel
-    # recalculation or on the user's Excel language settings.
-    alert_level = compute_alert_level(data)
-    ab.value = alert_level
-    alert_style = {
-        "CRITICAL": ("FF0000", "FFFFFF"),
-        "MAJOR": ("E53935", "FFFFFF"),
-        "MINOR": ("F57C00", "FFFFFF"),
-        "NONE": ("2E7D32", "FFFFFF"),
-        "NOT AN SDS": ("808080", "FFFFFF"),
-    }.get(alert_level)
-    if alert_style:
-        fill_hex, font_hex = alert_style
-        ab.fill = PatternFill("solid", fgColor=fill_hex)
-        ab.font = Font(name="Segoe UI Light", size=10, bold=True, color=font_hex)
-        ab.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    # Find next empty row (data starts at row 3)
+    row = 3
+    while ws.cell(row=row, column=1).value is not None:
+        row += 1
 
-    ws.cell(row=row, column=cidx("AD"), value="")
-    ws.cell(row=row, column=cidx("AE"), value="")
+    def cidx(col_letter: str) -> int:
+        return column_index_from_string(col_letter)
 
-    today = datetime.date.today()
-    af = ws.cell(row=row, column=cidx("AF"),
-                 value=datetime.datetime(today.year, today.month, today.day))
-    af.number_format = DATE_FMT
+    # Write data columns
+    for col_letter, json_key in COLS:
+        value = data.get(json_key, "")
+        cell = ws.cell(row=row, column=cidx(col_letter), value=value)
+        cell.fill = DATA_FILL
+        cell.alignment = Alignment(wrap_text=True, vertical="top")
 
-    ws.cell(row=row, column=cidx("AG"), value="AI - SDS Screening agent only")
-    ws.cell(row=row, column=cidx("AH"), value="Draft")
-
-
-def extend_dashboard(wb, analysis_row, dashboard_row):
-    if "SDS Dashboard" not in wb.sheetnames:
-        return
-    ws = wb["SDS Dashboard"]
-    if dashboard_row > 4:
-        copy_row_format(ws, 4, dashboard_row)
-    formulas = [
-        ("A", f"=ROW()-3"),
-        ("B", f"='SDS Analysis'!$A{analysis_row}"),
-        ("C", f"='SDS Analysis'!$B{analysis_row}"),
-        ("D", f"='SDS Analysis'!$C{analysis_row}"),
-        ("E", f"='SDS Analysis'!$D{analysis_row}"),
-        ("F", f"=IF('SDS Analysis'!$AE{analysis_row}<>\"\",'SDS Analysis'!$AE{analysis_row},'SDS Analysis'!$AB{analysis_row})"),
-        ("G", f"='SDS Analysis'!$AC{analysis_row}&IF('SDS Analysis'!$AD{analysis_row}<>\"\",CHAR(10)&CHAR(10)&\"Toxicologist comment: \"&'SDS Analysis'!$AD{analysis_row},\"\")"),
-        ("H", f"='SDS Analysis'!$AF{analysis_row}"),
-        ("I", f"='SDS Analysis'!$AG{analysis_row}"),
-        ("J", f"='SDS Analysis'!$AH{analysis_row}"),
-    ]
-    for col_l, val in formulas:
-        c = ws.cell(row=dashboard_row, column=cidx(col_l), value=val)
-        # Keep the user's Dashboard formatting and table style.
-        if col_l in ("E", "H"):
-            c.number_format = DATE_FMT
-
-
-def update_project_tab(wb, db_path):
-    """Preserve the user's Project layout and update only the database list."""
-    if "Project" not in wb.sheetnames:
-        return
-    ws = wb["Project"]
-    db_dates = get_db_dates(db_path)
-    loaded_sheet_names = set(db_dates.keys())
-
-    # The user's template has the database table header on row 16 and data rows 17:24.
-    for row in range(17, 25):
-        ws.cell(row=row, column=1).value = None
-        ws.cell(row=row, column=2).value = None
-
-    output_row = 17
-    for sheet_name, display_name in DB_DISPLAY_NAMES:
-        if sheet_name not in loaded_sheet_names:
-            continue
-        ws.cell(row=output_row, column=1).value = display_name
-        ws.cell(row=output_row, column=2).value = normalize_db_version(db_dates.get(sheet_name, "—"))
-        output_row += 1
-        if output_row > 24:
-            break
-
-
-# ─── Prompt builder ───────────────────────────────────────────────────────────
-def build_system_prompt(base_prompt, config, sds_format="16-section"):
-    azo_instr = (
-        "Col X (Azo dyes / Aromatic amines): assess only from evidence in the SDS, "
-        "the declared composition and the Aromatic Amines regulatory database. "
-        "Do not infer relevance from device category, textile status, dyeing-agent "
-        "or fiber-related criteria. If no relevant substance is identified, write "
-        "exactly: `N/A - no relevant azo dye or aromatic amine identified in the "
-        "SDS or database checks [Agent assessment]`."
+    # Col AC — ALERT LEVEL formula (auto-calculated)
+    ac = ws.cell(row=row, column=cidx("AC"))
+    ac.value = (
+        f'=IF(COUNTIF(G{row}:AB{row},"*🔴*")>0,"CRITICAL",'
+        f'IF(COUNTIF(G{row}:AB{row},"*🟠*")>0,"MAJOR",'
+        f'IF(COUNTIF(G{row}:AB{row},"*🟡*")>0,"MINOR","NONE")))'
     )
+    ac.fill = DATA_FILL
+    ac.alignment = Alignment(horizontal="center", vertical="center")
 
+    # Col AF — always empty (reserved for toxicologist)
+    af = ws.cell(row=row, column=cidx("AF"), value="/")
+    af.fill = DATA_FILL
+    af.alignment = Alignment(vertical="top")
+
+    # Col AG — blank (corrected alert level, filled by toxicologist)
+    ws.cell(row=row, column=cidx("AG"), value="").fill = DATA_FILL
+
+    # Col AH — Analysis Date
+    ah = ws.cell(row=row, column=cidx("AH"), value=datetime.date.today().strftime("%d/%m/%Y"))
+    ah.fill = DATA_FILL
+    ah.alignment = Alignment(vertical="top")
+
+    # Col AI — Analyst
+    ai = ws.cell(row=row, column=cidx("AI"), value="AI - SDS Screening agent only")
+    ai.fill = DATA_FILL
+    ai.alignment = Alignment(vertical="top")
+
+    return row
+
+
+def build_system_prompt(base_prompt: str, client_config: dict) -> str:
+    """Replace client placeholders and append JSON output instruction."""
     prompt = base_prompt
+    prompt = prompt.replace("<<CLIENT_NAME>>",             client_config.get("client_name", "CLIENT"))
+    prompt = prompt.replace("<<DEVICE_DESCRIPTION>>",      client_config.get("device_description", "medical device"))
+    prompt = prompt.replace("<<CONTACT_SCENARIO>>",        client_config.get("contact_scenario", "External skin contact — long-term use"))
+    prompt = prompt.replace("<<PRODUCT_TYPE_VOCABULARY>>", client_config.get("product_type_vocabulary", ""))
+    return prompt + """
 
-    prompt = prompt.replace(
-        "<<CLIENT_NAME>>",
-        config.get("client_name", "CLIENT")
-    )
-    prompt = prompt.replace(
-        "<<DEVICE_DESCRIPTION>>",
-        config.get("device_description", "medical device")
-    )
-    prompt = prompt.replace(
-        "<<CONTACT_SCENARIO>>",
-        "General screening - contact scenario not specified"
-    )
-    prompt = prompt.replace(
-        "<<AZO_DYES_INSTRUCTION>>",
-        azo_instr
-    )
+---
 
-    if sds_format == "8-section":
-        prompt += MSDS_8_MODIFIER
+## PYTHON APP — MANDATORY JSON OUTPUT
 
-    json_schema = """\n\n---\n\n## PYTHON APP — MANDATORY JSON OUTPUT\n
-After your screening report, output a JSON block in ```json ... ```.
-Use EXACTLY these keys. Values must include all markers (🔴🟠🟡), source tags, newlines as \\n.\n
+After your screening report, output a JSON block wrapped in ```json ... ```.
+Use EXACTLY these keys. Values must match what you would write in the Excel cells
+(with markers 🔴🟠🟡, newlines as \\n, source tags, etc.).
+
 ```json
 {
-  "sds_id": "", "product_name": "", "supplier": "", "sds_date": "", "composition": "",
-  "cytotoxicity": "", "sensitisation": "", "skin_irritation": "", "eye_irritation": "",
-  "acute_systemic_toxicity": "", "subacute_subchronic": "", "chronic_toxicity": "",
-  "genotoxicity": "", "carcinogenicity": "", "reproductive_toxicity": "",
-  "endocrine_disruption": "", "bioaccumulation": "", "haemocompatibility": "",
-  "pyrogenicity": "", "implantation": "", "immune_responses": "",
-  "other_biological_effects": "", "cmr_regulatory_status": "", "azo_dyes": "",
-  "formaldehyde": "", "heavy_metals": "", "reach_svhc": "", "alert_justification": ""
+  "sds_id": "",
+  "product_name": "",
+  "supplier": "",
+  "product_type": "",
+  "sds_date": "",
+  "composition": "",
+  "cytotoxicity": "",
+  "sensitisation": "",
+  "skin_irritation": "",
+  "eye_irritation": "",
+  "acute_systemic_toxicity": "",
+  "subacute_subchronic": "",
+  "chronic_toxicity": "",
+  "genotoxicity": "",
+  "carcinogenicity": "",
+  "reproductive_toxicity": "",
+  "endocrine_disruption": "",
+  "bioaccumulation": "",
+  "haemocompatibility": "",
+  "pyrogenicity": "",
+  "implantation": "",
+  "immune_responses": "",
+  "other_biological_effects": "",
+  "cmr_regulatory_status": "",
+  "azo_dyes": "",
+  "formaldehyde": "",
+  "heavy_metals": "",
+  "reach_svhc": "",
+  "alert_justification": "",
+  "residual_on_fiber": ""
 }
 ```
 """
-    return prompt + json_schema
 
 
-# ─── Email ─────────────────────────────────────────────────────────────────────
-
-# ── Notion registration helpers ────────────────────────────────────────────────
-def _notion_register(first_name: str, last_name: str, company: str, email: str):
-    """Create one Notion row for this trial and return its page ID."""
-    import requests as _req
-    from datetime import datetime, timezone
-    token = st.secrets.get("NOTION_TOKEN", "")
-    db_id = st.secrets.get("NOTION_DB_ID", "")
-    if not token or not db_id:
-        return True, None
-    admin = st.secrets.get("ADMIN_EMAIL", "elodie.saudrais@aconis.fr")
-    role  = "Admin" if email.strip().lower() == admin.strip().lower() else "Beta tester"
-    payload = {
-        "parent": {"database_id": db_id},
-        "properties": {
-            "Name":          {"title":     [{"text": {"content": first_name + " " + last_name}}]},
-            "First Name":    {"rich_text": [{"text": {"content": first_name}}]},
-            "Last Name":     {"rich_text": [{"text": {"content": last_name}}]},
-            "Company":       {"rich_text": [{"text": {"content": company}}]},
-            "Email":         {"email": email},
-            "Registered at": {"date": {"start": datetime.now(timezone.utc).isoformat()}},
-            "Role":          {"select": {"name": role}},
-        },
-    }
-    try:
-        r = _req.post(
-            "https://api.notion.com/v1/pages",
-            headers={"Authorization": "Bearer " + token,
-                     "Content-Type": "application/json",
-                     "Notion-Version": "2022-06-28"},
-            json=payload, timeout=10,
-        )
-        if r.status_code in (200, 201):
-            return True, r.json().get("id")
-        return False, None
-    except Exception:
-        return True, None
+# ── Feedback helpers ──────────────────────────────────────────────────────────
+APP_VERSION = "v1.1-feedback"
 
 
-def _notion_submit_feedback(email: str, company: str, rating: int, comments: str):
-    """Update the registration row for this trial with its feedback."""
-    import requests as _req
-    from datetime import datetime, timezone
+def _notion_property_value(prop_type: str, value):
+    """Build a Notion property value according to the database schema."""
+    if prop_type == "title":
+        return {"title": [{"type": "text", "text": {"content": str(value)[:2000]}}]}
+    if prop_type == "rich_text":
+        return {"rich_text": [{"type": "text", "text": {"content": str(value)[:2000]}}]}
+    if prop_type == "email":
+        return {"email": str(value).strip() or None}
+    if prop_type == "number":
+        return {"number": int(value)}
+    if prop_type == "date":
+        return {"date": {"start": str(value)}}
+    return None
 
+
+def submit_feedback_to_notion(rating: int, comments: str, email: str, company: str):
+    """Create one feedback page in the configured Notion database."""
     token = st.secrets.get("NOTION_TOKEN", "")
     db_id = st.secrets.get("NOTION_FEEDBACK_DB_ID", "") or st.secrets.get("NOTION_DB_ID", "")
+
     if not token or not db_id:
-        return False, "Feedback is not configured yet. Please ask the administrator to set NOTION_TOKEN and NOTION_DB_ID."
+        return False, (
+            "Feedback non configuré : ajoutez NOTION_TOKEN et "
+            "NOTION_FEEDBACK_DB_ID dans les secrets Streamlit."
+        )
 
     headers = {
-        "Authorization": "Bearer " + token,
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "Notion-Version": "2022-06-28",
     }
+
     try:
-        schema_response = _req.get(
+        schema_response = requests.get(
             f"https://api.notion.com/v1/databases/{db_id}",
-            headers=headers, timeout=10,
+            headers=headers,
+            timeout=10,
         )
         if schema_response.status_code != 200:
-            return False, "The SDS Screener Notion database could not be accessed. Check NOTION_DB_ID and Notion permissions."
+            return False, (
+                "La base Notion de feedback est inaccessible. Vérifiez son identifiant "
+                "et partagez-la avec l'intégration Notion."
+            )
+
         properties = schema_response.json().get("properties", {})
+        title_name = next(
+            (name for name, prop in properties.items() if prop.get("type") == "title"),
+            None,
+        )
+        if not title_name:
+            return False, "La base Notion doit contenir une propriété de type Title."
 
-        required = ["Name", "Email", "Rating", "Submitted at"]
-        missing = [name for name in required if name not in properties]
-        if missing:
-            return False, "Missing Notion feedback properties: " + ", ".join(missing)
-
-        def rich_text(value):
-            return [{"type": "text", "text": {"content": str(value)[:2000]}}]
-
-        def property_value(name, value):
-            prop_type = properties[name].get("type")
-            if prop_type == "title":
-                return {"title": rich_text(value)}
-            if prop_type == "rich_text":
-                return {"rich_text": rich_text(value)}
-            if prop_type == "email":
-                return {"email": value or None}
-            if prop_type == "number":
-                return {"number": int(value) if value not in (None, "") else None}
-            if prop_type == "select":
-                return {"select": {"name": str(value)}}
-            if prop_type == "date":
-                return {"date": {"start": value}}
-            return None
-
-        # The registration page ID is stored in session state, so feedback is
-        # attached to the exact trial that produced it. For an older session,
-        # recover the most recently created row for the same email.
-        page_id = st.session_state.get("notion_page_id", "")
-        if not page_id:
-            query = {
-                "filter": {"property": "Email", "email": {"equals": email}},
-                "sorts": [{"timestamp": "created_time", "direction": "descending"}],
-                "page_size": 1,
-            }
-            q = _req.post(
-                f"https://api.notion.com/v1/databases/{db_id}/query",
-                headers=headers, json=query, timeout=10,
-            )
-            if q.status_code == 200:
-                rows = q.json().get("results", [])
-                if rows:
-                    page_id = rows[0].get("id", "")
-
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         values = {
+            title_name: f"SDS Screener feedback - {datetime.date.today().isoformat()}",
             "Feedback": "Beta tester feedback",
-            "Rating": rating,
+            "Rating": int(rating),
             "Comments": comments.strip(),
+            "Email": email.strip(),
+            "Company": company.strip(),
             "Submitted at": now,
-            "App version": "v2.0",
+            "App version": APP_VERSION,
         }
-        payload_properties = {}
+
+        encoded = {}
         for name, value in values.items():
-            if name in properties:
-                encoded = property_value(name, value)
-                if encoded is not None:
-                    payload_properties[name] = encoded
+            if name not in properties:
+                continue
+            prop_type = properties[name].get("type")
+            if prop_type == "title" and name != title_name:
+                continue
+            prop_value = _notion_property_value(prop_type, value)
+            if prop_value is not None:
+                encoded[name] = prop_value
 
-        if page_id:
-            response = _req.patch(
-                f"https://api.notion.com/v1/pages/{page_id}",
-                headers=headers,
-                json={"properties": payload_properties},
-                timeout=10,
-            )
-            if response.status_code in (200, 201):
-                return True, "Thank you for your feedback."
-            return False, "Feedback could not be saved in the trial row in Notion. Please try again later."
-
-        # Fallback only if the registration row cannot be found. This still
-        # creates one complete trial row, rather than a feedback-only row.
-        fallback_values = {
-            "Name": f"SDS Screener trial - {company or email} - {now[:10]}",
-            "Email": email,
-            "Company": company,
-            "Role": "Beta tester",
-            **values,
-        }
-        create_properties = {}
-        for name, value in fallback_values.items():
-            if name in properties:
-                encoded = property_value(name, value)
-                if encoded is not None:
-                    create_properties[name] = encoded
-        response = _req.post(
+        response = requests.post(
             "https://api.notion.com/v1/pages",
             headers=headers,
-            json={"parent": {"database_id": db_id}, "properties": create_properties},
+            json={"parent": {"database_id": db_id}, "properties": encoded},
             timeout=10,
         )
         if response.status_code in (200, 201):
-            return True, "Thank you for your feedback."
-        return False, "Feedback could not be saved in Notion. Please try again later."
+            return True, "Merci pour votre feedback."
+
+        return False, "Le feedback n'a pas pu être enregistré dans Notion."
     except Exception:
-        return False, "Feedback could not be saved in Notion. The analysis and Excel download remain available."
+        return False, (
+            "Impossible de contacter Notion. L'analyse et le téléchargement Excel "
+            "restent disponibles."
+        )
 
-def _show_registration_gate():
-    st.markdown(
-        "<h1 style='color:#007AFF;font-weight:700;margin:0;padding-top:4px;'>"
-        "Biocompatibility SDS Screener</h1>"
-        "<p style='color:#007AFF;font-size:0.82em;margin:2px 0 0 0;'>"
-        "ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance</p>",
-        unsafe_allow_html=True,
-    )
+
+def render_feedback_form(company: str):
+    """Render the feedback form exactly once per Streamlit rerun."""
     st.divider()
-    st.markdown(
-        "<div style='background:#F0F6FF;border-left:4px solid #007AFF;border-radius:8px;"
-        "padding:22px 26px;margin:10px 0 28px 0;max-width:600px;'>"
-        "<p style='margin:0 0 8px 0;font-size:1.05em;color:#007AFF;font-weight:600;'>"
-        "🧪 Beta access</p>"
-        "<p style='margin:0;color:#333;line-height:1.6;'>"
-        "Please fill in your details to access the application. "
-        "Your information will be stored securely and used only to manage beta access."
-        "</p></div>",
-        unsafe_allow_html=True,
+    st.subheader("📝 Feedback bêta-testeur")
+    st.write("Comment évaluez-vous votre expérience avec le SDS Screener ?")
+    st.caption(
+        "Merci de ne pas inclure d'informations confidentielles sur un client "
+        "ou sur le contenu d'une FDS."
     )
-    with st.form("registration_form"):
-        c1, c2 = st.columns(2)
-        with c1:
-            first_name = st.text_input("First name *", placeholder="Marie")
-        with c2:
-            last_name  = st.text_input("Last name *", placeholder="Dupont")
-        company  = st.text_input("Company *", placeholder="Acme Medical")
-        email    = st.text_input("Professional email *", placeholder="marie.dupont@acme.com")
-        submitted = st.form_submit_button("Request access →", type="primary", use_container_width=True)
+
+    with st.form("feedback_form", clear_on_submit=False):
+        rating = st.selectbox(
+            "Note *",
+            options=[1, 2, 3, 4, 5],
+            index=None,
+            placeholder="Sélectionnez une note",
+            format_func=lambda value: "★" * value + "☆" * (5 - value),
+        )
+        feedback_email = st.text_input(
+            "Votre email (facultatif)",
+            key="feedback_email",
+            help="Permet d'identifier le bêta-testeur. Il n'est pas nécessaire pour envoyer le feedback.",
+        )
+        comments = st.text_area(
+            "Commentaires ou suggestions (facultatif)",
+            max_chars=2000,
+            key="feedback_comments",
+        )
+        submitted = st.form_submit_button("Envoyer le feedback", type="primary")
+
         if submitted:
-            if not all([first_name.strip(), last_name.strip(), company.strip(), email.strip()]):
-                st.error("Please fill in all fields.")
-            elif "@" not in email or "." not in email.split("@")[-1]:
-                st.error("Please enter a valid email address.")
+            if rating is None:
+                st.error("Veuillez sélectionner une note avant d'envoyer le feedback.")
             else:
-                with st.spinner("Registering…"):
-                    registration_ok, notion_page_id = _notion_register(
-                        first_name.strip(), last_name.strip(),
-                        company.strip(), email.strip()
-                    )
-                st.session_state["notion_page_id"] = notion_page_id or ""
-                st.session_state["registered"]     = True
-                st.session_state["reg_first_name"] = first_name.strip()
-                st.session_state["reg_last_name"]  = last_name.strip()
-                st.session_state["reg_company"]    = company.strip()
-                st.session_state["reg_email"]      = email.strip()
-                st.rerun()
+                ok, message = submit_feedback_to_notion(
+                    int(rating), comments, feedback_email, company
+                )
+                if ok:
+                    st.session_state["feedback_sent"] = True
+                    st.success(message)
+                else:
+                    st.warning(message)
+
+    if st.session_state.get("feedback_sent"):
+        st.success("Feedback déjà envoyé pour cette session.")
 
 
-# ─── CSS ──────────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-html, body, [class*="css"] { font-family: 'Segoe UI Light', 'Helvetica Neue', sans-serif; }
-[data-testid="stSidebar"] { background-color: #F0F6FF; }
-[data-testid="stSidebar"] img {
-    mix-blend-mode: multiply;
-}
-.main .block-container { padding-top: 0.6rem !important; }
-[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3 { color: #007AFF; }
-h1 { color: #007AFF !important; font-weight: 300; }
-h2, h3 { color: #007AFF; font-weight: 300; }
-.stButton > button[kind="primary"],
-.stDownloadButton > button,
-[data-testid="stFormSubmitButton"] > button,
-button[data-testid="baseButton-primary"] {
-    background-color: #007AFF !important;
-    color: #FFFFFF !important;
-    border: 1px solid #007AFF !important;
-    font-family: 'Segoe UI Light', sans-serif;
-    letter-spacing: 0.03em;
-}
-.stButton > button[kind="primary"]:hover,
-.stDownloadButton > button:hover,
-[data-testid="stFormSubmitButton"] > button:hover,
-button[data-testid="baseButton-primary"]:hover {
-    background-color: #005FCC !important;
-    border-color: #005FCC !important;
-    color: #FFFFFF !important;
-}
-.footer-aconis {
-    margin-top: 40px; padding: 18px 0 8px 0;
-    border-top: 1px solid #DCE8FF; color: #888;
-    font-size: 0.78em; text-align: center; line-height: 1.7;
-}
-</style>
-""", unsafe_allow_html=True)
+# ── MAIN APP ──────────────────────────────────────────────────────────────────
 
-# ─── Sidebar ──────────────────────────────────────────────────────────────────
-with st.sidebar:
-    logo_bytes = base64.b64decode(LOGO_B64)
-    st.image(logo_bytes, use_container_width=True)
-    st.markdown("---")
-    st.caption("v2.0 — Claude Sonnet 4.5 — ISO 10993-1:2025")
-    st.markdown("---")
-    st.markdown(
-        '<a href="mailto:elodie.saudrais@aconis.fr?subject=SDS%20Screener%20-%20Contact" '
-        'style="display:block;text-align:center;background:#007AFF;color:#fff;'
-        'padding:8px 0;border-radius:6px;text-decoration:none;font-size:0.9em;">'
-        '✉️ Contacter ACONIS</a>',
-        unsafe_allow_html=True,
-    )
-    st.markdown("---")
-    st.markdown(
-        "<p style=\'font-size:0.85em;color:#007AFF;font-weight:600;margin:0 0 6px 0;\'>"
-        "About this application</p>"
-        "<p style=\'font-size:0.80em;color:#444;line-height:1.65;margin:0 0 12px 0;\'>"
-        "Supports the biocompatibility assessment of medical devices "
-        "(ISO&nbsp;10993-1:2025 / MDR&nbsp;2017/745). "
-        "Automatically <b>extracts and reports biocompatibility data</b> across "
-        "17&nbsp;endpoints and <b>cross-references each compound against "
-        "8 regulatory databases</b>.</p>"
-        "<p style=\'font-size:0.85em;color:#007AFF;font-weight:600;margin:0 0 6px 0;\'>"
-        "How it works</p>"
-        "<div style=\'font-size:0.80em;color:#444;line-height:1.85;\'>"
-        "📄 SDS PDF upload<br>"
-        "↓ 🔢 Text &amp; CAS extraction<br>"
-        "↓ 🔍 8 regulatory databases<br>"
-        "↓ 🤖 AI-assisted synthesis<br>"
-        "↓ 📊 Excel report download"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-    st.markdown("---")
-    db_dates_sb = get_db_dates(DB_FILE) if os.path.exists(DB_FILE) else {}
-    db_rows_sb  = "".join(
-        "<tr style=\'border-bottom:1px solid #DCE8FF;\'>"
-        "<td style=\'padding:5px 8px;color:#222;font-size:0.78em;font-weight:500;\'>"
-        + disp +
-        "</td><td style=\'padding:5px 8px;color:#555;font-size:0.75em;\'>"
-        + normalize_db_version(db_dates_sb.get(sheet, "—")) +
-        "</td></tr>"
-        for sheet, disp in DB_DISPLAY_NAMES
-    )
-    st.markdown(
-        "<p style=\'font-size:0.85em;color:#007AFF;font-weight:600;margin:0 0 8px 0;\'>"
-        "Regulatory databases</p>"
-        "<table style=\'border-collapse:collapse;width:100%;border:1px solid #DCE8FF;\'>"
-        "<tr style=\'background:#007AFF;color:#fff;\'>"
-        "<th style=\'padding:5px 8px;font-size:0.78em;font-weight:500;\'>Database</th>"
-        "<th style=\'padding:5px 8px;font-size:0.78em;font-weight:500;\'>Version</th>"
-        "</tr>"
-        + db_rows_sb +
-        "</table>",
-        unsafe_allow_html=True,
-    )
-
-api_key     = st.secrets.get("ANTHROPIC_API_KEY","")
-ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL","elodie.saudrais@aconis.fr")
-BETA_LIMIT  = 5
-
-# ─── Registration gate ─────────────────────────────────────────────────────────
-if not st.session_state.get("registered", False):
-    _show_registration_gate()
-    st.stop()
-
-# ─── Main area ────────────────────────────────────────────────────────────────
+st.markdown('<p class="block-title">🔬 SDS Biocompatibility Screener</p>', unsafe_allow_html=True)
 st.markdown(
-    "<h1 style='color:#007AFF;font-weight:700;margin:0 0 4px 0;'>"
-    "Biocompatibility SDS Screener</h1>"
-    "<p style='color:#007AFF;font-size:0.82em;margin:2px 0 0 0;font-weight:400;'>"
-    "ACONIS — Automated SDS analysis for ISO 10993-1:2025 / MDR 2017/745 compliance</p>",
+    '<p class="block-sub">SIGVARIS GROUP — Analyse automatique des FDS '
+    '(MDR 2017/745 / ISO 10993-1:2025)</p>',
     unsafe_allow_html=True,
 )
 
-# ── 1. Presentation ───────────────────────────────────────────────────────────
-db_dates = get_db_dates(DB_FILE) if os.path.exists(DB_FILE) else {}
+# ── Sidebar ───────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.header("⚙️ Configuration")
 
-# ── Client info from registration ─────────────────────────────────────────────
-client_name  = st.session_state.get("reg_company", "")
-client_email = st.session_state.get("reg_email", "")
-config = {"client_name": client_name, "client_email": client_email}
+    api_key = st.text_input(
+        "Clé API Anthropic",
+        type="password",
+        placeholder="sk-ant-...",
+        help="Depuis console.anthropic.com > API Keys",
+    )
 
-# Keep the last completed report available across Streamlit reruns, including
-# download and feedback submissions.
+    st.divider()
+    st.header("📁 Fichier Excel")
+    excel_upload = st.file_uploader(
+        "SIGVARIS FDS.xlsx (avec bases de données)",
+        type=["xlsx"],
+        help="Votre fichier Excel contenant les onglets SVHC, CLP, IARC, etc.",
+    )
+    if excel_upload:
+        st.success(f"✅ {excel_upload.name}")
+
+    st.divider()
+    st.divider()
+    st.header("🏢 Configuration client")
+
+    client_name = st.text_input(
+        "Nom du client",
+        value="SIGVARIS GROUP",
+        help="Remplace <<CLIENT_NAME>> dans le prompt",
+    )
+    device_description = st.text_input(
+        "Description du dispositif",
+        value="medical compression hosiery",
+        help="Remplace <<DEVICE_DESCRIPTION>> dans le prompt",
+    )
+    contact_scenario = st.text_input(
+        "Scénario de contact",
+        value="External skin contact with damaged/compromised skin — long-term chronic use",
+        help="Remplace <<CONTACT_SCENARIO>> dans le prompt",
+    )
+
+    DEFAULT_PRODUCT_TYPES = """| Value | Definition |
+|---|---|
+| `Fibre - Elastic` | Elastane / Spandex / Lycra fibers |
+| `Fibre - Cellulosic` | Cotton / Linen / Viscose / Bamboo viscose / Rayon |
+| `Fibre - Non-cellulosic synthetic` | Polyamide / Polyester / PBT / PTFE / Polypropylene / Aramid / Silk |
+| `Fibre - Silicone` | Silicone bands / grip bands / border elements |
+| `Dyeing agent` | Colorant designed to fix to fiber |
+| `Auxiliary dyeing agent` | Process chemical used in dye bath alongside colorant |
+| `Processing aid` | Lubricant / oil / finish applied outside dye bath |
+| `To verify` | Cannot be determined from SDS data alone |"""
+
+    product_type_vocabulary = st.text_area(
+        "Vocabulaire Product Type (Markdown)",
+        value=DEFAULT_PRODUCT_TYPES,
+        height=180,
+        help="Remplace <<PRODUCT_TYPE_VOCABULARY>> dans le prompt. Adaptez selon le client.",
+    )
+
+    client_config = {
+        "client_name":            client_name,
+        "device_description":     device_description,
+        "contact_scenario":       contact_scenario,
+        "product_type_vocabulary": product_type_vocabulary,
+    }
+
+    st.divider()
+    st.caption("v1.0 — Claude Sonnet 4.6 — ISO 10993-1:2025")
+
+# ── Main columns ─────────────────────────────────────────────────────────────
+left, right = st.columns([3, 1])
+
+with left:
+    st.subheader("📄 Déposer les FDS à analyser")
+    pdf_uploads = st.file_uploader(
+        "Fichiers PDF (une ou plusieurs FDS)",
+        type=["pdf"],
+        accept_multiple_files=True,
+    )
+
+with right:
+    st.subheader("Guide rapide")
+    st.markdown("""
+**1.** Clé API dans la barre latérale  
+**2.** Chargez votre Excel SIGVARIS  
+**3.** Déposez vos PDF  
+**4.** Cliquez **Analyser**  
+**5.** Téléchargez l'Excel mis à jour
+
+⏱ ~1 min par FDS  
+🔒 Données non stockées
+""")
+
+# ── Persistent report state ───────────────────────────────────────────────────
 if "last_results" not in st.session_state:
     st.session_state["last_results"] = []
 if "last_excel_bytes" not in st.session_state:
     st.session_state["last_excel_bytes"] = None
-if "last_excel_name" not in st.session_state:
-    st.session_state["last_excel_name"] = None
+if "last_excel_filename" not in st.session_state:
+    st.session_state["last_excel_filename"] = None
 
-def _section_title(text):
-    st.markdown(
-        f"<h2 style='color:#007AFF;font-weight:700;margin:24px 0 4px 0;'>{text}</h2>",
-        unsafe_allow_html=True,
-    )
+# ── Run button ────────────────────────────────────────────────────────────────
+can_run = bool(api_key and excel_upload and pdf_uploads)
+run = st.button("🚀 Analyser", disabled=not can_run, type="primary", use_container_width=True)
 
-def _build_results_table(results):
-    thead = (
-        '<table style="width:100%;border-collapse:collapse;'
-        'border:1px solid #DCE8FF;font-family:Segoe UI Light,Arial,sans-serif;">'
-        '<thead><tr style="background:#007AFF;color:#fff;text-align:left;">'
-        '<th style="padding:10px 8px;width:36px;">#</th>'
-        '<th style="padding:10px 8px;width:130px;">SDS ID</th>'
-        '<th style="padding:10px 8px;width:170px;">Product</th>'
-        '<th style="padding:10px 8px;width:130px;">Supplier</th>'
-        '<th style="padding:10px 8px;width:95px;">SDS Date</th>'
-        '<th style="padding:10px 8px;width:105px;">Alert Level</th>'
-        '<th style="padding:10px 8px;">Alert Justification</th>'
-        '</tr></thead><tbody>'
-    )
-    rows = []
-    for i, r in enumerate(results):
-        lvl = r["alert_level"]
-        bg, fg, emoji = ALERT_COLORS.get(lvl, ("#888", "#fff", "⚠️"))
-        badge = (
-            '<span style="background:' + bg + ';color:' + fg + ';'
-            'padding:3px 10px;border-radius:4px;font-size:0.82em;'
-            'font-weight:600;white-space:nowrap;">' + emoji + ' ' + lvl + '</span>'
-        )
-        justif_html = r.get("alert_justification", "").replace("\n", "<br>")
-        row_bg = (
-            "#FFF8F8" if lvl == "CRITICAL" else
-            "#FFE5E5" if lvl == "MAJOR" else
-            "#FFF3E0" if lvl == "MINOR" else
-            "#F5FFF8" if lvl == "NONE" else "#F5F5F5"
-        )
-        rows.append(
-            '<tr style="background:' + row_bg + ';vertical-align:top;border-bottom:1px solid #EEF4FF;">'
-            '<td style="padding:10px 8px;text-align:center;color:#666;font-size:0.85em;">' + str(i+1) + '</td>'
-            '<td style="padding:10px 8px;font-size:0.82em;color:#444;word-break:break-all;">' + str(r.get("sds_id", "") or "—") + '</td>'
-            '<td style="padding:10px 8px;font-weight:600;color:#222;">' + str(r.get("product", "") or "—") + '</td>'
-            '<td style="padding:10px 8px;color:#444;">' + str(r.get("supplier", "") or "—") + '</td>'
-            '<td style="padding:10px 8px;color:#444;white-space:nowrap;">' + str(r.get("sds_date", "") or "—") + '</td>'
-            '<td style="padding:10px 8px;text-align:center;">' + badge + '</td>'
-            '<td style="padding:10px 8px;font-size:0.85em;color:#333;line-height:1.6;">' + justif_html + '</td>'
-            '</tr>'
-        )
-    return thead + "".join(rows) + "</tbody></table>"
-
-# ── 1. SDS Upload ─────────────────────────────────────────────────────────────
-st.markdown(
-    "<h2 style=\'color:#007AFF;font-weight:700;margin:24px 0 4px 0;\'>1 — SDS Upload</h2>",
-    unsafe_allow_html=True,
-)
-st.caption("Max 5 files per session (beta)")
-pdf_uploads = st.file_uploader(
-    "Upload one or more SDS files (PDF)",
-    type=["pdf"], accept_multiple_files=True)
-
-st.divider()
-
-# ── 4. Analysis ───────────────────────────────────────────────────────────────
-st.markdown(
-    "<h2 style=\'color:#007AFF;font-weight:700;margin:24px 0 4px 0;\'>2 — Analysis</h2>",
-    unsafe_allow_html=True,
-)
-st.caption("Each SDS is processed in ~1–2 min. The application extracts the chemical composition and collects data across 17 biocompatibility endpoints, cross-references each compound against 8 databases, and generates an AI-assisted risk assessment.")
-can_run = bool(api_key and pdf_uploads)
-run = st.button("🚀 Run Analysis", disabled=not can_run, type="primary", use_container_width=True)
-if not can_run and pdf_uploads is not None:
-    missing = [x for x, ok in [("Anthropic API key", api_key), ("SDS PDF(s)", pdf_uploads)] if not ok]
+if not can_run and not run:
+    missing = []
+    if not api_key:     missing.append("clé API Anthropic")
+    if not excel_upload: missing.append("fichier Excel")
+    if not pdf_uploads:  missing.append("FDS PDF")
     if missing:
-        st.info(f"Missing: {', '.join(missing)}")
+        st.info(f"Manquant(s) : {', '.join(missing)}")
 
-# ── 5. Processing ─────────────────────────────────────────────────────────────
-results = []
-excel_bytes = None
-fname = None
+# ── Processing ────────────────────────────────────────────────────────────────
 if run:
-    # ── Beta limit check ─────────────────────────────────────────────────────
-    is_admin     = client_email.strip().lower() == ADMIN_EMAIL.strip().lower()
-    max_files    = None if is_admin else BETA_LIMIT
-    if not is_admin and len(pdf_uploads) > BETA_LIMIT:
-        st.warning(
-            f"⚠️ Beta version: analysis limited to **{BETA_LIMIT} SDS per session**. "
-            f"{len(pdf_uploads) - BETA_LIMIT} additional file(s) ignored. "
-            
-            
-        )
-        pdf_uploads = pdf_uploads[:BETA_LIMIT]
+    st.divider()
 
-    missing_files = [(p,n) for p,n in [
-        (PROMPT_FILE,"agent_prompt_generic.txt"),
-        (DB_FILE,    "databases.xlsx"),
-        (TMPL_FILE,  "template.xlsx"),
-    ] if not os.path.exists(p)]
-    if missing_files:
-        for _,n in missing_files:
-            st.error(f"❌ Fichier manquant : **{n}**")
+    # Load agent prompt
+    prompt_file = os.path.join(os.path.dirname(__file__), "agent_prompt_generic.txt")
+    if not os.path.exists(prompt_file):
+        st.error(
+            "❌ Fichier **agent_prompt_generic.txt** introuvable.\n\n"
+            "Placez-le dans le même dossier que app.py."
+        )
         st.stop()
 
-    with open(PROMPT_FILE, "r", encoding="utf-8") as f:
+    with open(prompt_file, "r", encoding="utf-8") as f:
         base_prompt = f.read()
+    system_prompt = build_system_prompt(base_prompt, client_config)
 
-    with st.spinner("Loading databases…"):
-        with open(DB_FILE, "rb") as f:
-            db_bytes = f.read()
-        dbs = load_databases(db_bytes)
+    # Load Excel
+    excel_bytes = excel_upload.read()
 
-    with open(TMPL_FILE, "rb") as f:
-        tmpl_bytes = f.read()
+    with st.spinner("Chargement des bases de données..."):
+        try:
+            dbs = load_databases(excel_bytes)
+            db_names = [k for k in dbs if k != "residual"]
+            st.success(f"✅ Bases chargées : {', '.join(db_names)} + table résidualité")
+        except Exception as e:
+            st.error(f"Erreur chargement Excel : {e}")
+            st.stop()
 
-    wb = load_workbook(io.BytesIO(tmpl_bytes))
-    if "SDS Analysis" in wb.sheetnames:
-        apply_cf(wb["SDS Analysis"])
-
-    client_api = anthropic.Anthropic(api_key=api_key)
+    wb = load_workbook(io.BytesIO(excel_bytes))
+    client = anthropic.Anthropic(api_key=api_key)
+    results = []
 
     for idx, pdf_file in enumerate(pdf_uploads):
-        st.subheader(f"📄 {pdf_file.name}  ({idx+1}/{len(pdf_uploads)})")
+        st.subheader(f"📄 {pdf_file.name}  ({idx + 1} / {len(pdf_uploads)})")
         prog = st.progress(0)
         msg  = st.empty()
 
         try:
-            msg.info("📖 Extracting PDF text…")
+            # 1. Extract text
+            msg.info("📖 Extraction du texte PDF...")
             prog.progress(10)
-            pdf_bytes = pdf_file.read()
-            doc   = fitz.open(stream=pdf_bytes, filetype="pdf")
-            pages = [f"--- PAGE {i+1} ---\n{p.get_text()}" for i,p in enumerate(doc)]
-            doc.close()
-            pdf_text = "\n".join(pages)
+            pdf_bytes_data = pdf_file.read()
+            pdf_text = extract_pdf_text(pdf_bytes_data)
 
             if len(pdf_text.strip()) < 200:
-                st.warning("⚠️ Very short text — PDF may be image-based (scanned).")
+                st.warning("⚠️ Peu de texte extrait — le PDF est peut-être scanné en image.")
 
-            sds_format = detect_sds_format(pdf_text)
-            fmt_label  = "16-section GHS" if sds_format == "16-section" else "Old MSDS format (8 sections)"
-
-            msg.info("🔢 Extracting CAS numbers…")
+            # 2. Extract CAS numbers
+            msg.info("🔢 Extraction des numéros CAS...")
             prog.progress(20)
-            cas_list = sorted(set(re.findall(r'\b\d{1,7}-\d{2}-\d\b', pdf_text)))
-            with st.expander("Technical details"):
-                st.caption(f"📋 Format detected: {fmt_label}")
-                st.caption(f"{len(cas_list)} CAS found: "
-                           f"{', '.join(cas_list[:12])}{'…' if len(cas_list)>12 else ''}") 
+            cas_list = extract_cas_numbers(pdf_text)
+            st.caption(f"{len(cas_list)} CAS trouvé(s) : {', '.join(cas_list[:15])}{'…' if len(cas_list) > 15 else ''}")
 
-            msg.info("📊 Cross-referencing databases…")
+            # 3. Database lookups
+            msg.info("📊 Recherche dans les bases de données...")
             prog.progress(35)
-            lookup_report = lookup_all_cas(cas_list, dbs)
+            lookup_report = lookup_cas_in_databases(cas_list, dbs)
 
-            msg.info("🤖 AI analysis in progress (~1–2 min)…")
+            # 4. Call Claude
+            msg.info("🤖 Analyse IA en cours... (1-2 min)")
             prog.progress(50)
 
-            system_prompt = build_system_prompt(base_prompt, config, sds_format)
+            user_msg = f"""Please analyze the Safety Data Sheet below.
 
-            config_block = (
-                f"DEVICE CONFIGURATION FOR THIS ANALYSIS:\n"
-                f"- Client: {config['client_name']}\n"
-                f"- SDS Format: {fmt_label}\n"
-                f"- Contact Scenario: General screening\n"
-            )
-            user_msg = (
-                f"{config_block}\n"
-                f"=== SDS TEXT ===\n{pdf_text[:60000]}\n\n"
-                f"=== PRE-COMPUTED DATABASE LOOKUP RESULTS ===\n{lookup_report}\n\n"
-                "Use the database results above as authoritative sources. "
-                "Complete the full analysis then output the JSON block."
-            )
+=== SDS TEXT ===
+{pdf_text[:60000]}
 
-            response = client_api.messages.create(
+=== PRE-COMPUTED DATABASE RESULTS ===
+{lookup_report}
+
+Note: SVHC, CLP ATP22, and IARC lookups above are pre-computed from your Excel databases.
+For REACH Annex XVII, Aromatic Amines Ent.43, ED Assessment (ECHA), TEDX, and Oeko-Tex,
+apply your embedded knowledge based on the CAS numbers listed.
+
+Please complete the full analysis and output the JSON block at the end.
+"""
+
+            response = client.messages.create(
                 model="claude-sonnet-4-5",
-                max_tokens=16000,
+                max_tokens=8000,
                 system=system_prompt,
-                messages=[{"role":"user","content":user_msg}],
+                messages=[{"role": "user", "content": user_msg}],
             )
-            raw = response.content[0].text
+            response_text = response.content[0].text
             prog.progress(80)
 
-            msg.info("📋 Parsing JSON response…")
-            data = {}
-            for pattern in [
-                r'```json\s*(.*?)\s*```',
-                r'```\s*(\{.*?\})\s*```',
-                r'\{.*\}',
-            ]:
-                m = re.search(pattern, raw, re.DOTALL)
-                if m:
-                    try:
-                        data = json.loads(m.group(1) if m.lastindex else m.group())
-                        break
-                    except Exception:
-                        pass
+            # 5. Parse JSON
+            msg.info("📋 Structuration des données...")
+            data = parse_json_block(response_text)
 
             if not data:
-                error_reason = "JSON non trouvé dans la réponse de l'IA · JSON not found in AI response"
-                st.warning(f"⚠️ {error_reason}")
-                st.text_area("Raw AI response", raw, height=300)
-                results.append({
-                    "sds_id": "—", "product": pdf_file.name, "supplier": "—",
-                    "sds_date": "—", "alert_level": "ERROR",
-                    "alert_justification": f"⚠️ Traitement échoué : {error_reason}",
-                    "tox_comment": "", "status": "Error", "format": fmt_label,
-                })
-                prog.progress(100); msg.empty()
+                st.warning("⚠️ Impossible d'extraire le JSON. Rapport brut ci-dessous :")
+                st.text_area("Réponse Claude", response_text, height=400)
+                prog.progress(100)
+                msg.empty()
                 continue
 
-            ws_sds   = wb["SDS Analysis"]
-            next_row = 5
-            while ws_sds.cell(row=next_row, column=1).value is not None:
-                next_row += 1
-            dashboard_row = next_row - 1
+            # 6. Residual lookup override if product name known
+            product_name = data.get("product_name", "")
+            if product_name and "residual" in dbs:
+                residual_val = lookup_residual(product_name, dbs["residual"])
+                if residual_val != "To provide - Sigvaris classification required":
+                    data["residual_on_fiber"] = residual_val
 
-            msg.info("📝 Writing to Excel…")
+            # 7. Write to Excel
+            msg.info("📝 Écriture dans l'Excel...")
             prog.progress(90)
-            write_row(wb, data, next_row)
-            extend_dashboard(wb, next_row, dashboard_row)
+            row_num = write_row_to_excel(wb, data)
 
-            alert_level = compute_alert_level(data)
-            results.append({
-                "sds_id":             data.get("sds_id",""),
-                "product":            data.get("product_name", pdf_file.name),
-                "supplier":           data.get("supplier",""),
-                "sds_date":           data.get("sds_date",""),
-                "alert_level":        alert_level,
-                "alert_justification": data.get("alert_justification",""),
-                "tox_comment":        "",
-                "status":             "Draft",
-                "format":             fmt_label,
-            })
+            results.append({"file": pdf_file.name, "product": product_name, "row": row_num})
 
-            prog.progress(100); msg.empty()
-            st.success(f"✅ **{data.get('product_name', pdf_file.name)}** — row {next_row} written.")
+            prog.progress(100)
+            msg.empty()
+            st.success(
+                f"✅ **{product_name or pdf_file.name}** — "
+                f"Analyse terminée, ligne **{row_num}** ajoutée."
+            )
 
+            with st.expander("📊 Rapport de screening complet"):
+                st.markdown(response_text[:6000] + ("…" if len(response_text) > 6000 else ""))
 
         except anthropic.AuthenticationError:
-            st.error("❌ Invalid API key."); break
+            st.error("❌ Clé API invalide. Vérifiez votre clé Anthropic.")
+            break
         except anthropic.RateLimitError:
-            st.error("❌ Rate limit reached — wait 30 s."); break
+            st.error("❌ Limite de requêtes atteinte. Attendez 30 s puis relancez.")
+            break
         except Exception as exc:
-            error_reason = str(exc)
-            st.error(f"❌ Error: {exc}")
-            results.append({
-                "sds_id":"—","product":pdf_file.name,"supplier":"—","sds_date":"—",
-                "alert_level":"ERROR",
-                "alert_justification":f"⚠️ Technical error: {error_reason[:200]}",
-                "tox_comment":"","status":"Error","format":"—",
-            })
-            with st.expander("Technical details"):
+            st.error(f"❌ Erreur inattendue : {exc}")
+            with st.expander("Détail technique"):
                 st.code(traceback.format_exc())
 
-    # ── 6. Results summary ────────────────────────────────────────────────────
+    # ── Save and display report ────────────────────────────────────────────────
     if results:
-        update_project_tab(wb, DB_FILE)
-        enforce_report_formatting(wb)
-        apply_table_font_and_alignment(wb)
-        add_report_logos(wb)
-        if "Project" in wb.sheetnames:
-            wb.active = wb.sheetnames.index("Project")
-        try:
-            wb.calculation.fullCalcOnLoad = True
-            wb.calculation.forceFullCalc = True
-            wb.calculation.calcMode = "auto"
-        except Exception:
-            pass
-        buf = io.BytesIO(); wb.save(buf); buf.seek(0)
-        excel_bytes = buf.getvalue()
-        fname = (f"SDS_Analysis_{config.get('client_name','').replace(' ','_')}"
-                 f"_{datetime.date.today().strftime('%Y%m%d')}.xlsx")
+        buf = io.BytesIO()
+        wb.save(buf)
+        report_bytes = buf.getvalue()
+        filename = f"SIGVARIS_FDS_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
+
+        # Keep the report available after the feedback form triggers a rerun.
         st.session_state["last_results"] = results
-        st.session_state["last_excel_bytes"] = excel_bytes
-        st.session_state["last_excel_name"] = fname
+        st.session_state["last_excel_bytes"] = report_bytes
+        st.session_state["last_excel_filename"] = filename
 
         st.divider()
-        _section_title(f"3 — Preview — {len(results)} SDS analysed")
-        st.caption(
-            "The summary table is displayed below. Download the complete Excel report "
-            "for the full analysis and regulatory database screening results."
-        )
-
-        st.markdown(_build_results_table(results), unsafe_allow_html=True)
-        for r in results:
-            if r["alert_level"] == "ERROR":
-                st.warning("⚠️ **" + r["product"] + "** — " + r["alert_justification"])
-
+        st.subheader(f"🎉 {len(results)} FDS analysée(s) avec succès")
         st.download_button(
-            label=f"📥 Download {fname}",
-            data=excel_bytes,
-            file_name=fname,
+            label=f"📥 Télécharger {filename}",
+            data=report_bytes,
+            file_name=filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary",
             use_container_width=True,
             on_click="ignore",
         )
+        st.table([
+            {"FDS": r["file"], "Produit": r["product"], "Ligne Excel": r["row"]}
+            for r in results
+        ])
+        render_feedback_form(client_name)
 
-        st.divider()
-        _section_title("4 — Beta tester feedback")
-        st.write("How would you rate your experience with the SDS Screener?")
-        st.caption("Please do not include confidential client information or confidential SDS content in your comments.")
-        with st.form("feedback_form", clear_on_submit=False):
-            rating = st.selectbox(
-                "Rating *",
-                options=[1, 2, 3, 4, 5],
-                index=None,
-                placeholder="Select a rating",
-                format_func=lambda value: "★" * value + "☆" * (5 - value),
-            )
-            comments = st.text_area("Comments or suggestions", max_chars=2000)
-            feedback_submitted = st.form_submit_button("Submit feedback", type="primary")
-            if feedback_submitted:
-                if rating is None:
-                    st.error("Please select a rating before submitting your feedback.")
-                else:
-                    ok, message = _notion_submit_feedback(
-                        client_email, client_name, int(rating), comments
-                    )
-                    if ok:
-                        st.success("Thank you for your feedback.")
-                    else:
-                        st.warning(message)
 
-# Re-render the completed report after download or feedback form reruns.
+# Re-render the completed report after a download or feedback submission rerun.
+# The form keeps the same key, so the first click is not lost.
 if not run and st.session_state.get("last_results") and st.session_state.get("last_excel_bytes"):
-    results = st.session_state["last_results"]
-    excel_bytes = st.session_state["last_excel_bytes"]
-    fname = st.session_state["last_excel_name"]
+    cached_results = st.session_state["last_results"]
+    cached_bytes = st.session_state["last_excel_bytes"]
+    cached_filename = st.session_state["last_excel_filename"]
+
     st.divider()
-    _section_title(f"3 — Preview — {len(results)} SDS analysed")
-    st.caption(
-        "The summary table is displayed below. Download the complete Excel report "
-        "for the full analysis and regulatory database screening results."
-    )
-    st.markdown(_build_results_table(results), unsafe_allow_html=True)
-    for r in results:
-        if r["alert_level"] == "ERROR":
-            st.warning("⚠️ **" + r["product"] + "** — " + r["alert_justification"])
+    st.subheader(f"🎉 {len(cached_results)} FDS analysée(s) avec succès")
     st.download_button(
-        label=f"📥 Download {fname}",
-        data=excel_bytes,
-        file_name=fname,
+        label=f"📥 Télécharger {cached_filename}",
+        data=cached_bytes,
+        file_name=cached_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="primary",
         use_container_width=True,
         on_click="ignore",
-        key="cached_download",
+        key="cached_excel_download",
     )
-    _section_title("4 — Beta tester feedback")
-    st.write("How would you rate your experience with the SDS Screener?")
-    st.caption("Please do not include confidential client information or confidential SDS content in your comments.")
-    with st.form("cached_feedback_form", clear_on_submit=False):
-        cached_rating = st.selectbox(
-            "Rating *", [1, 2, 3, 4, 5], index=None,
-            placeholder="Select a rating",
-            format_func=lambda value: "★" * value + "☆" * (5 - value),
-        )
-        cached_comments = st.text_area("Comments or suggestions", max_chars=2000)
-        cached_submit = st.form_submit_button("Submit feedback", type="primary")
-        if cached_submit:
-            if cached_rating is None:
-                st.error("Please select a rating before submitting your feedback.")
-            else:
-                ok, message = _notion_submit_feedback(
-                    client_email, client_name, int(cached_rating), cached_comments
-                )
-                if ok:
-                    st.success("Thank you for your feedback.")
-                else:
-                    st.warning(message)
-
-# ─── Footer ───────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="footer-aconis">
-    Aconis SAS — 6, rue Bouchard 69510 Messimy, France<br>
-    RCS Lyon n° 944 426 113 — SIRET 944 426 113 00014<br>
-    <a href="mailto:elodie.saudrais@aconis.fr" style="color:#007AFF;">elodie.saudrais@aconis.fr</a>
-    &nbsp;·&nbsp; +33 6 11 38 53 65
-</div>
-""", unsafe_allow_html=True)
+    st.table([
+        {"FDS": r["file"], "Produit": r["product"], "Ligne Excel": r["row"]}
+        for r in cached_results
+    ])
+    render_feedback_form(client_name)
