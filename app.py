@@ -10,6 +10,7 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.drawing.image import Image as XLImage
 import pandas as pd
+from PIL import Image as PILImage
 import json, io, datetime, re, os, traceback, base64
 
 # ─── Page config ──────────────────────────────────────────────────────────────
@@ -63,6 +64,17 @@ ANALYSIS_FIELDS = [
     "other_biological_effects","cmr_regulatory_status","azo_dyes",
     "formaldehyde","heavy_metals","reach_svhc",
 ]
+
+SDS_JSON_FIELDS = [
+    "sds_id", "product_name", "supplier", "sds_date", "composition",
+    *ANALYSIS_FIELDS, "alert_justification",
+]
+SDS_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {field: {"type": "string"} for field in SDS_JSON_FIELDS},
+    "required": SDS_JSON_FIELDS,
+    "additionalProperties": False,
+}
 
 ALERT_COLORS = {
     "CRITICAL":   ("#CC0000", "#FFFFFF", "🔴"),
@@ -931,7 +943,8 @@ button[data-testid="baseButton-primary"]:hover {
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     logo_bytes = base64.b64decode(LOGO_B64)
-    st.image(logo_bytes, width=200)
+    logo_image = PILImage.open(io.BytesIO(logo_bytes)).convert("RGBA")
+    st.image(logo_image, width=200)
     st.markdown("---")
     st.caption("v2.0 — Claude Sonnet 5.5 — ISO 10993-1:2025")
     st.markdown("---")
@@ -1210,6 +1223,12 @@ if run:
                 max_tokens=16000,
                 system=system_prompt,
                 messages=[{"role":"user","content":user_msg}],
+                output_config={
+                    "format": {
+                        "type": "json_schema",
+                        "schema": SDS_JSON_SCHEMA,
+                    }
+                },
             )
             # Sonnet 5.5 may return a ThinkingBlock before the final TextBlock.
             # Read only text blocks instead of assuming content[0] has a .text attribute.
@@ -1242,6 +1261,12 @@ if run:
                     max_tokens=16000,
                     system=system_prompt,
                     messages=[{"role": "user", "content": retry_msg}],
+                    output_config={
+                        "format": {
+                            "type": "json_schema",
+                            "schema": SDS_JSON_SCHEMA,
+                        }
+                    },
                 )
                 raw = "\n".join(
                     block.text
