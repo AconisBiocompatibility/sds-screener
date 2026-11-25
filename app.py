@@ -910,7 +910,7 @@ with st.sidebar:
     logo_bytes = base64.b64decode(LOGO_B64)
     st.image(logo_bytes, use_container_width=True)
     st.markdown("---")
-    st.caption("v2.0 — Claude Sonnet 4.5 — ISO 10993-1:2025")
+    st.caption("v2.0 — Claude Sonnet 5.5 — ISO 10993-1:2025")
     st.markdown("---")
     st.markdown(
         '<a href="mailto:elodie.saudrais@aconis.fr?subject=SDS%20Screener%20-%20Contact" '
@@ -1169,7 +1169,7 @@ if run:
             )
 
             response = client_api.messages.create(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-5-5",
                 max_tokens=16000,
                 system=system_prompt,
                 messages=[{"role":"user","content":user_msg}],
